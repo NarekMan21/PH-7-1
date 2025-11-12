@@ -617,48 +617,13 @@
             const status = document.getElementById('status');
             const lastUpdate = document.getElementById('lastUpdate');
             
-            // Получаем данные из бэкенда через /api
-            fetch('/api')
+            // Получаем все данные из истории
+            fetch('/history')
                 .then(response => response.json())
-                .then(data => {
-                    if (data.v && data.v === true) {
-                        status.textContent = 'ОНЛАЙН';
-                        status.className = 'status online';
-                        content.innerHTML = `
-                            <div class="grid">
-                                <div class="card" style="border-left: 4px solid #4caf50; cursor: pointer;" onclick="showSensorCharts('${data.ip || 'unknown'}', 'Датчик')" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
-                                    <div class="card-header">
-                                        <span class="card-title">Датчик почвы</span>
-                                        <div style="display: flex; align-items: center; gap: 10px;">
-                                            <div style="font-size: 0.8em; opacity: 0.7;">${data.ip || '--'}</div>
-                                        </div>
-                                    </div>
-                                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin-top: 15px;">
-                                        <div>
-                                            <div style="font-size: 0.9em; opacity: 0.8;">🌡️ Температура</div>
-                                            <div style="font-size: 1.8em; font-weight: 700;">${data.t.toFixed(1)}°C</div>
-                                        </div>
-                                        <div>
-                                            <div style="font-size: 0.9em; opacity: 0.8;">💧 Влажность</div>
-                                            <div style="font-size: 1.8em; font-weight: 700;">${data.h.toFixed(1)}%</div>
-                                        </div>
-                                        <div>
-                                            <div style="font-size: 0.9em; opacity: 0.8;">🧪 pH</div>
-                                            <div style="font-size: 1.8em; font-weight: 700;">${data.ph.toFixed(1)}</div>
-                                        </div>
-                                        <div>
-                                            <div style="font-size: 0.9em; opacity: 0.8;">⚡ EC</div>
-                                            <div style="font-size: 1.8em; font-weight: 700;">${Math.round(data.ec)}</div>
-                                        </div>
-                                    </div>
-                                    <div class="card-footer">
-                                        <span>N: ${Math.round(data.n)} | P: ${Math.round(data.p)} | K: ${Math.round(data.k)}</span>
-                                        <span style="color: #4caf50; font-size: 1.2em;">●</span>
-                                    </div>
-                                </div>
-                            </div>
-                        `;
-                    } else {
+                .then(result => {
+                    const historyData = result.data || result || [];
+                    
+                    if (historyData.length === 0) {
                         status.textContent = 'ОФЛАЙН';
                         status.className = 'status offline';
                         content.innerHTML = `
@@ -669,12 +634,99 @@
                                 </div>
                                 <div class="card-value">--<span class="card-unit"></span></div>
                                 <div class="card-footer">
-                                    <span>${data.error || 'Ожидание данных с датчика'}</span>
+                                    <span>Ожидание данных с датчиков</span>
                                     <span style="color: #f44336; font-size: 1.2em;">●</span>
                                 </div>
                             </div>
                         `;
+                        lastUpdate.textContent = formatTime(Date.now());
+                        return;
                     }
+                    
+                    // Группируем данные по IP адресам и берем последнюю запись для каждого
+                    const sensorsMap = new Map();
+                    
+                    historyData.forEach(record => {
+                        if (record.v === true && record.ip) {
+                            const ip = record.ip;
+                            const existing = sensorsMap.get(ip);
+                            
+                            // Если записи нет или текущая запись новее, обновляем
+                            if (!existing || new Date(record.timestamp || record.date) > new Date(existing.timestamp || existing.date)) {
+                                sensorsMap.set(ip, record);
+                            }
+                        }
+                    });
+                    
+                    const sensors = Array.from(sensorsMap.values());
+                    
+                    if (sensors.length === 0) {
+                        status.textContent = 'ОФЛАЙН';
+                        status.className = 'status offline';
+                        content.innerHTML = `
+                            <div class="card" style="border-left: 4px solid #f44336;">
+                                <div class="card-header">
+                                    <span class="card-title">Нет валидных данных</span>
+                                    <div class="card-icon">⚠️</div>
+                                </div>
+                                <div class="card-value">--<span class="card-unit"></span></div>
+                                <div class="card-footer">
+                                    <span>В базе нет валидных записей</span>
+                                    <span style="color: #f44336; font-size: 1.2em;">●</span>
+                                </div>
+                            </div>
+                        `;
+                        lastUpdate.textContent = formatTime(Date.now());
+                        return;
+                    }
+                    
+                    // Отображаем все датчики
+                    status.textContent = `ОНЛАЙН (${sensors.length} ${sensors.length === 1 ? 'датчик' : sensors.length < 5 ? 'датчика' : 'датчиков'})`;
+                    status.className = 'status online';
+                    
+                    let html = '<div class="grid">';
+                    
+                    sensors.forEach(sensor => {
+                        const sensorName = `Датчик ${sensor.ip}`;
+                        const lastUpdateTime = new Date(sensor.timestamp || sensor.date);
+                        const timeAgo = getTimeAgo(lastUpdateTime);
+                        
+                        html += `
+                            <div class="card" style="border-left: 4px solid #4caf50; cursor: pointer;" onclick="showSensorCharts('${sensor.ip}', '${sensorName.replace(/'/g, "\\'")}')" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+                                <div class="card-header">
+                                    <span class="card-title">${sensorName}</span>
+                                    <div style="display: flex; align-items: center; gap: 10px;">
+                                        <div style="font-size: 0.8em; opacity: 0.7;">${sensor.ip}</div>
+                                    </div>
+                                </div>
+                                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin-top: 15px;">
+                                    <div>
+                                        <div style="font-size: 0.9em; opacity: 0.8;">🌡️ Температура</div>
+                                        <div style="font-size: 1.8em; font-weight: 700;">${sensor.t.toFixed(1)}°C</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 0.9em; opacity: 0.8;">💧 Влажность</div>
+                                        <div style="font-size: 1.8em; font-weight: 700;">${sensor.h.toFixed(1)}%</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 0.9em; opacity: 0.8;">🧪 pH</div>
+                                        <div style="font-size: 1.8em; font-weight: 700;">${sensor.ph.toFixed(1)}</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 0.9em; opacity: 0.8;">⚡ EC</div>
+                                        <div style="font-size: 1.8em; font-weight: 700;">${Math.round(sensor.ec)}</div>
+                                    </div>
+                                </div>
+                                <div class="card-footer">
+                                    <span>N: ${Math.round(sensor.n)} | P: ${Math.round(sensor.p)} | K: ${Math.round(sensor.k)}</span>
+                                    <span style="color: #4caf50; font-size: 1.2em;" title="Обновлено: ${timeAgo}">●</span>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    
+                    html += '</div>';
+                    content.innerHTML = html;
                     lastUpdate.textContent = formatTime(Date.now());
                 })
                 .catch(error => {
@@ -694,6 +746,25 @@
                         </div>
                     `;
                 });
+        }
+        
+        // Функция для вычисления времени назад
+        function getTimeAgo(date) {
+            const now = new Date();
+            const diff = Math.floor((now - date) / 1000); // разница в секундах
+            
+            if (diff < 60) {
+                return `${diff} сек назад`;
+            } else if (diff < 3600) {
+                const minutes = Math.floor(diff / 60);
+                return `${minutes} ${minutes === 1 ? 'мин' : 'мин'} назад`;
+            } else if (diff < 86400) {
+                const hours = Math.floor(diff / 3600);
+                return `${hours} ${hours === 1 ? 'час' : hours < 5 ? 'часа' : 'часов'} назад`;
+            } else {
+                const days = Math.floor(diff / 86400);
+                return `${days} ${days === 1 ? 'день' : days < 5 ? 'дня' : 'дней'} назад`;
+            }
         }
 
         // Загрузка данных для графиков конкретного датчика
