@@ -1,5 +1,6 @@
 -- SQL скрипт для настройки таблицы в Supabase
 -- Выполните этот скрипт в SQL Editor вашего проекта Supabase
+-- Безопасно для повторного выполнения
 
 -- Создание таблицы для данных датчиков
 CREATE TABLE IF NOT EXISTS sensor_data (
@@ -26,6 +27,11 @@ CREATE INDEX IF NOT EXISTS idx_sensor_data_ip ON sensor_data(ip);
 -- Включение Row Level Security (RLS) для безопасности
 ALTER TABLE sensor_data ENABLE ROW LEVEL SECURITY;
 
+-- Удаление существующих политик (если есть) перед созданием новых
+DROP POLICY IF EXISTS "Allow public read access" ON sensor_data;
+DROP POLICY IF EXISTS "Allow public insert" ON sensor_data;
+DROP POLICY IF EXISTS "Allow public delete" ON sensor_data;
+
 -- Политика: разрешить чтение всем (для API)
 CREATE POLICY "Allow public read access" ON sensor_data
     FOR SELECT
@@ -40,4 +46,3 @@ CREATE POLICY "Allow public insert" ON sensor_data
 CREATE POLICY "Allow public delete" ON sensor_data
     FOR DELETE
     USING (true);
-
