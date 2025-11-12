@@ -145,15 +145,31 @@ CREATE INDEX IF NOT EXISTS idx_sensor_data_ip ON sensor_data(ip);
 
 #### Шаг 4: Настройка переменных окружения в Vercel
 
+**Ваши данные Supabase:**
+- URL: `https://dxbvnmvgrxsgexwtrhoh.supabase.co`
+- Key: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4YnZubXZncnhzZ2V4d3RyaG9oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI5NTI0ODIsImV4cCI6MjA3ODUyODQ4Mn0.MyjcP2BptexI_u3djyNUMdE9sxEDEbuZdPnmMIaFSXI`
+
+**Через Vercel CLI:**
+```bash
+vercel env add SUPABASE_URL
+# Введите: https://dxbvnmvgrxsgexwtrhoh.supabase.co
+# Выберите: Production, Preview, Development
+
+vercel env add SUPABASE_KEY
+# Введите: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4YnZubXZncnhzZ2V4d3RyaG9oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI5NTI0ODIsImV4cCI6MjA3ODUyODQ4Mn0.MyjcP2BptexI_u3djyNUMdE9sxEDEbuZdPnmMIaFSXI
+# Выберите: Production, Preview, Development
+```
+
+**Или через веб-интерфейс:**
 1. Перейдите в ваш проект на [vercel.com](https://vercel.com)
 2. Откройте **Settings > Environment Variables**
 3. Добавьте две переменные:
 
    **Name**: `SUPABASE_URL`  
-   **Value**: `https://xxxxx.supabase.co` (ваш Project URL)
+   **Value**: `https://dxbvnmvgrxsgexwtrhoh.supabase.co`
 
    **Name**: `SUPABASE_KEY`  
-   **Value**: `ваш-anon-key` (ваш anon public key)
+   **Value**: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4YnZubXZncnhzZ2V4d3RyaG9oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI5NTI0ODIsImV4cCI6MjA3ODUyODQ4Mn0.MyjcP2BptexI_u3djyNUMdE9sxEDEbuZdPnmMIaFSXI`
 
 4. Выберите **Environment**: Production, Preview, Development (все три)
 5. Нажмите "Save"
