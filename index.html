@@ -457,6 +457,26 @@
             <button class="tab" onclick="selectedSensorIp = null; showTab('charts')">📈 Графики</button>
         </div>
 
+        <!-- Модальное окно для переименования датчика -->
+        <div id="renameModal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>✏️ Переименовать датчик</h2>
+                    <button class="modal-close" onclick="closeRenameDialog()">×</button>
+                </div>
+                <div class="modal-body">
+                    <label>IP адрес:</label>
+                    <input type="text" id="renameSensorIp" readonly style="background: #f5f5f5; cursor: not-allowed;" />
+                    <label>Название датчика:</label>
+                    <input type="text" id="renameSensorName" placeholder="Введите название" onkeypress="if(event.key==='Enter') saveRenameSensor()" />
+                </div>
+                <div class="modal-footer">
+                    <button onclick="saveRenameSensor()">Сохранить</button>
+                    <button onclick="closeRenameDialog()">Отмена</button>
+                </div>
+            </div>
+        </div>
+
         <!-- Вкладка текущих показаний -->
         <div id="current-tab" class="tab-content active">
             <div id="content">
@@ -555,6 +575,24 @@
         let charts = {};
         let allData = [];
         let selectedSensorIp = null; // IP выбранного датчика для просмотра графиков
+        
+        // Загрузка имен датчиков из localStorage
+        let sensorNames = JSON.parse(localStorage.getItem('sensorNames') || '{}');
+        
+        // Функция для получения имени датчика
+        function getSensorName(ip) {
+            return sensorNames[ip] || `Датчик ${ip}`;
+        }
+        
+        // Функция для сохранения имени датчика
+        function saveSensorName(ip, name) {
+            if (name && name.trim()) {
+                sensorNames[ip] = name.trim();
+            } else {
+                delete sensorNames[ip];
+            }
+            localStorage.setItem('sensorNames', JSON.stringify(sensorNames));
+        }
 
         // Переключение основных вкладок
         function showTab(tabName) {
@@ -590,7 +628,8 @@
             selectedSensorIp = ip;
             showTab('charts');
             setTimeout(() => {
-                loadSensorChartData(ip, name);
+                const sensorName = name || getSensorName(ip);
+                loadSensorChartData(ip, sensorName);
             }, 100);
         }
 
@@ -690,16 +729,17 @@
                     let html = '<div class="grid">';
                     
                     sensors.forEach(sensor => {
-                        const sensorName = `Датчик ${sensor.ip}`;
+                        const sensorName = getSensorName(sensor.ip);
                         const lastUpdateTime = new Date(sensor.timestamp || sensor.date);
                         const timeAgo = getTimeAgo(lastUpdateTime);
                         
                         html += `
-                            <div class="card" style="border-left: 4px solid #4caf50; cursor: pointer;" onclick="showSensorCharts('${sensor.ip}', '${sensorName.replace(/'/g, "\\'")}')" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+                            <div class="card" style="border-left: 4px solid #4caf50; cursor: pointer;" onclick="if(!event.target.closest('.edit-btn')) showSensorCharts('${sensor.ip}', '${sensorName.replace(/'/g, "\\'")}')" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
                                 <div class="card-header">
-                                    <span class="card-title">${sensorName}</span>
+                                    <span class="card-title" id="sensor-name-${sensor.ip}">${sensorName}</span>
                                     <div style="display: flex; align-items: center; gap: 10px;">
                                         <div style="font-size: 0.8em; opacity: 0.7;">${sensor.ip}</div>
+                                        <button class="edit-btn" onclick="event.stopPropagation(); showRenameDialog('${sensor.ip}')" style="background: rgba(255, 255, 255, 0.2); border: none; border-radius: 5px; padding: 5px 8px; cursor: pointer; font-size: 0.8em; color: #fff; transition: all 0.3s;" onmouseover="this.style.background='rgba(255, 255, 255, 0.3)'" onmouseout="this.style.background='rgba(255, 255, 255, 0.2)'" title="Переименовать датчик">✏️</button>
                                     </div>
                                 </div>
                                 <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin-top: 15px;">
@@ -774,7 +814,8 @@
         async function loadSensorChartData(ip, name) {
             try {
                 // Обновляем заголовок
-                document.getElementById('charts-title').textContent = name || `Датчик ${ip}`;
+                const sensorName = name || getSensorName(ip);
+                document.getElementById('charts-title').textContent = sensorName;
                 document.getElementById('charts-subtitle').textContent = `IP: ${ip}`;
                 document.getElementById('back-to-all').style.display = 'block';
                 document.getElementById('stats-grid').style.display = 'none';
@@ -1066,9 +1107,10 @@
                     return point ? point.t : null;
                 });
                 const nonNullPoints = dataPoints.filter(p => p !== null).length;
-                console.log(`   График температуры - Датчик ${ip}: ${nonNullPoints} точек данных из ${sortedTimestamps.length} временных меток`);
+                const sensorName = getSensorName(ip);
+                console.log(`   График температуры - ${sensorName}: ${nonNullPoints} точек данных из ${sortedTimestamps.length} временных меток`);
                 return {
-                    label: `Датчик ${ip}`,
+                    label: sensorName,
                     data: dataPoints,
                     borderColor: colors[index % colors.length].border,
                     backgroundColor: colors[index % colors.length].bg,
@@ -1098,7 +1140,7 @@
                     return point ? point.h : null;
                 });
                 return {
-                    label: `Датчик ${ip}`,
+                    label: getSensorName(ip),
                     data: dataPoints,
                     borderColor: colors[index % colors.length].border,
                     backgroundColor: colors[index % colors.length].bg,
@@ -1127,7 +1169,7 @@
                     return point ? point.ph : null;
                 });
                 return {
-                    label: `Датчик ${ip}`,
+                    label: getSensorName(ip),
                     data: dataPoints,
                     borderColor: colors[index % colors.length].border,
                     backgroundColor: colors[index % colors.length].bg,
@@ -1169,9 +1211,10 @@
                     const point = findPoint(ts);
                     return point ? point.k : null;
                 });
+                const sensorName = getSensorName(ip);
                 npkDatasets.push(
                     {
-                        label: `Датчик ${ip} - N`,
+                        label: `${sensorName} - N`,
                         data: nDataPoints,
                         borderColor: color.border,
                         backgroundColor: color.bg,
@@ -1180,7 +1223,7 @@
                         spanGaps: true
                     },
                     {
-                        label: `Датчик ${ip} - P`,
+                        label: `${sensorName} - P`,
                         data: pDataPoints,
                         borderColor: color.border,
                         backgroundColor: color.bg,
@@ -1190,7 +1233,7 @@
                         spanGaps: true
                     },
                     {
-                        label: `Датчик ${ip} - K`,
+                        label: `${sensorName} - K`,
                         data: kDataPoints,
                         borderColor: color.border,
                         backgroundColor: color.bg,
@@ -1234,9 +1277,10 @@
                     const point = findPoint(ts);
                     return point ? point.ph : null;
                 });
+                const sensorName = getSensorName(ip);
                 allDatasets.push(
                     {
-                        label: `Датчик ${ip} - Температура`,
+                        label: `${sensorName} - Температура`,
                         data: tDataPoints,
                         borderColor: color.border,
                         backgroundColor: color.bg,
@@ -1245,7 +1289,7 @@
                         spanGaps: true
                     },
                     {
-                        label: `Датчик ${ip} - Влажность`,
+                        label: `${sensorName} - Влажность`,
                         data: hDataPoints,
                         borderColor: color.border,
                         backgroundColor: color.bg,
@@ -1255,7 +1299,7 @@
                         spanGaps: true
                     },
                     {
-                        label: `Датчик ${ip} - pH`,
+                        label: `${sensorName} - pH`,
                         data: phDataPoints,
                         borderColor: color.border,
                         backgroundColor: color.bg,
@@ -1348,22 +1392,71 @@
             });
         }
 
-        // Упрощенная версия - работаем напрямую с бэкендом
-        function showAddSensorDialog() {
-            alert('Датчик автоматически определяется через бэкенд. Данные берутся из последней записи в базе.');
+        // Функции для переименования датчика
+        function showRenameDialog(ip) {
+            const modal = document.getElementById('renameModal');
+            document.getElementById('renameSensorIp').value = ip;
+            document.getElementById('renameSensorName').value = getSensorName(ip);
+            modal.style.display = 'flex';
+            setTimeout(() => document.getElementById('renameSensorName').focus(), 100);
         }
 
-        function closeAddSensorDialog() {
-            // Не используется
+        function closeRenameDialog() {
+            document.getElementById('renameModal').style.display = 'none';
         }
 
-        function addSensor() {
-            // Не используется
+        function saveRenameSensor() {
+            const ip = document.getElementById('renameSensorIp').value;
+            const name = document.getElementById('renameSensorName').value.trim();
+            
+            if (!ip) {
+                alert('Ошибка: IP адрес не указан');
+                return;
+            }
+            
+            saveSensorName(ip, name);
+            
+            // Обновляем отображение имени на странице
+            const nameElement = document.getElementById(`sensor-name-${ip}`);
+            if (nameElement) {
+                nameElement.textContent = getSensorName(ip);
+            }
+            
+            closeRenameDialog();
+            
+            // Обновляем данные, чтобы применить новое имя
+            updateData();
+            
+            // Если открыты графики, обновляем их тоже
+            if (document.getElementById('charts-tab').classList.contains('active')) {
+                if (selectedSensorIp === ip) {
+                    // Если открыт график этого датчика, обновляем его
+                    loadSensorChartData(ip, getSensorName(ip));
+                } else if (!selectedSensorIp) {
+                    // Если открыто сравнение всех датчиков, обновляем его
+                    loadAllSensorsChartData();
+                }
+            }
         }
 
-        function removeSensor(ip) {
-            // Не используется
-        }
+        // Закрытие модального окна при клике вне его
+        window.addEventListener('load', function() {
+            const modal = document.getElementById('renameModal');
+            if (modal) {
+                modal.addEventListener('click', function(e) {
+                    if (e.target === this) {
+                        closeRenameDialog();
+                    }
+                });
+            }
+        });
+
+        // Закрытие модального окна по Escape
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeRenameDialog();
+            }
+        });
 
         // Закрытие модального окна при клике вне его
         window.addEventListener('load', function() {
@@ -1422,7 +1515,7 @@
         setInterval(() => {
             if (document.getElementById('charts-tab').classList.contains('active')) {
                 if (selectedSensorIp) {
-                    loadSensorChartData(selectedSensorIp, 'Датчик');
+                    loadSensorChartData(selectedSensorIp, getSensorName(selectedSensorIp));
                 } else {
                     loadAllSensorsChartData();
                 }
