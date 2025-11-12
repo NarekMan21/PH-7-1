@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Графики датчика почвы</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --background: 0 0% 100%;
+            --foreground: 222.2 84% 4.9%;
+            --card: 0 0% 100%;
+            --card-foreground: 222.2 84% 4.9%;
+            --popover: 0 0% 100%;
+            --popover-foreground: 222.2 84% 4.9%;
+            --primary: 222.2 47.4% 11.2%;
+            --primary-foreground: 210 40% 98%;
+            --secondary: 210 40% 96.1%;
+            --secondary-foreground: 222.2 47.4% 11.2%;
+            --muted: 210 40% 96.1%;
+            --muted-foreground: 215.4 16.3% 46.9%;
+            --accent: 210 40% 96.1%;
+            --accent-foreground: 222.2 47.4% 11.2%;
+            --destructive: 0 84.2% 60.2%;
+            --destructive-foreground: 210 40% 98%;
+            --border: 214.3 31.8% 91.4%;
+            --input: 214.3 31.8% 91.4%;
+            --ring: 222.2 84% 4.9%;
+            --radius: 0.5rem;
+            --chart-1: 12 76% 61%;
+            --chart-2: 173 58% 39%;
+            --chart-3: 197 37% 24%;
+            --chart-4: 43 74% 66%;
+            --chart-5: 27 87% 67%;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: hsl(var(--background));
+            color: hsl(var(--foreground));
+            padding: 20px;
+            line-height: 1.5;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: hsl(var(--card));
+            border: 1px solid hsl(var(--border));
+            border-radius: var(--radius);
+            box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+        }
+
+        .header h1 {
+            font-size: 2rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            color: hsl(var(--muted-foreground));
+            font-size: 0.875rem;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: hsl(var(--card));
+            border: 1px solid hsl(var(--border));
+            border-radius: var(--radius);
+            padding: 20px;
+            box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+        }
+
+        .stat-label {
+            font-size: 0.875rem;
+            color: hsl(var(--muted-foreground));
+            margin-bottom: 8px;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 600;
+        }
+
+        .chart-section {
+            background: hsl(var(--card));
+            border: 1px solid hsl(var(--border));
+            border-radius: var(--radius);
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+        }
+
+        .chart-header {
+            margin-bottom: 20px;
+        }
+
+        .chart-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .chart-description {
+            font-size: 0.875rem;
+            color: hsl(var(--muted-foreground));
+        }
+
+        .chart-container {
+            position: relative;
+            height: 300px;
+            margin-top: 20px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: hsl(var(--muted-foreground));
+        }
+
+        .error {
+            text-align: center;
+            padding: 40px;
+            color: hsl(var(--destructive));
+        }
+
+        .tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+            border-bottom: 1px solid hsl(var(--border));
+        }
+
+        .tab {
+            padding: 12px 20px;
+            background: none;
+            border: none;
+            border-bottom: 2px solid transparent;
+            cursor: pointer;
+            font-size: 0.875rem;
+            color: hsl(var(--muted-foreground));
+            transition: all 0.2s;
+        }
+
+        .tab:hover {
+            color: hsl(var(--foreground));
+        }
+
+        .tab.active {
+            color: hsl(var(--foreground));
+            border-bottom-color: hsl(var(--primary));
+        }
+
+        @media (max-width: 768px) {
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .chart-container {
+                height: 250px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 Графики датчика почвы</h1>
+            <p>Визуализация данных с датчика PH-7-1</p>
+        </div>
+
+        <div id="stats" class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">Всего записей</div>
+                <div class="stat-value" id="totalRecords">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Первая запись</div>
+                <div class="stat-value" id="firstRecord" style="font-size: 1rem;">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Последняя запись</div>
+                <div class="stat-value" id="lastRecord" style="font-size: 1rem;">-</div>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <button class="tab active" onclick="showTab('temperature')">Температура</button>
+            <button class="tab" onclick="showTab('humidity')">Влажность</button>
+            <button class="tab" onclick="showTab('ph')">pH</button>
+            <button class="tab" onclick="showTab('npk')">NPK</button>
+            <button class="tab" onclick="showTab('all')">Все параметры</button>
+        </div>
+
+        <div id="temperature-section" class="chart-section">
+            <div class="chart-header">
+                <h3 class="chart-title">Температура</h3>
+                <p class="chart-description">Изменение температуры почвы во времени</p>
+            </div>
+            <div class="chart-container">
+                <canvas id="temperatureChart"></canvas>
+            </div>
+        </div>
+
+        <div id="humidity-section" class="chart-section" style="display: none;">
+            <div class="chart-header">
+                <h3 class="chart-title">Влажность</h3>
+                <p class="chart-description">Изменение влажности почвы во времени</p>
+            </div>
+            <div class="chart-container">
+                <canvas id="humidityChart"></canvas>
+            </div>
+        </div>
+
+        <div id="ph-section" class="chart-section" style="display: none;">
+            <div class="chart-header">
+                <h3 class="chart-title">pH</h3>
+                <p class="chart-description">Изменение уровня pH почвы во времени</p>
+            </div>
+            <div class="chart-container">
+                <canvas id="phChart"></canvas>
+            </div>
+        </div>
+
+        <div id="npk-section" class="chart-section" style="display: none;">
+            <div class="chart-header">
+                <h3 class="chart-title">NPK (Азот, Фосфор, Калий)</h3>
+                <p class="chart-description">Содержание питательных веществ в почве</p>
+            </div>
+            <div class="chart-container">
+                <canvas id="npkChart"></canvas>
+            </div>
+        </div>
+
+        <div id="all-section" class="chart-section" style="display: none;">
+            <div class="chart-header">
+                <h3 class="chart-title">Все параметры</h3>
+                <p class="chart-description">Сравнение всех параметров датчика</p>
+            </div>
+            <div class="chart-container">
+                <canvas id="allChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let charts = {};
+        let allData = [];
+
+        // Загрузка данных
+        async function loadData() {
+            try {
+                const response = await fetch('/history');
+                const result = await response.json();
+                allData = result.data || result || [];
+                
+                if (allData.length === 0) {
+                    document.getElementById('stats').innerHTML = '<div class="error">Нет данных для отображения</div>';
+                    return;
+                }
+
+                updateStats();
+                createCharts();
+            } catch (error) {
+                console.error('Ошибка загрузки данных:', error);
+                document.getElementById('stats').innerHTML = '<div class="error">Ошибка загрузки данных</div>';
+            }
+        }
+
+        // Обновление статистики
+        function updateStats() {
+            document.getElementById('totalRecords').textContent = allData.length;
+            
+            if (allData.length > 0) {
+                const first = new Date(allData[0].timestamp || allData[0].date);
+                const last = new Date(allData[allData.length - 1].timestamp || allData[allData.length - 1].date);
+                
+                document.getElementById('firstRecord').textContent = first.toLocaleString('ru-RU');
+                document.getElementById('lastRecord').textContent = last.toLocaleString('ru-RU');
+            }
+        }
+
+        // Создание графиков
+        function createCharts() {
+            const chartData = allData
+                .filter(d => d.v === true)
+                .map(d => ({
+                    date: new Date(d.timestamp || d.date),
+                    t: d.t,
+                    h: d.h,
+                    ph: d.ph,
+                    n: d.n,
+                    p: d.p,
+                    k: d.k,
+                    ec: d.ec
+                }))
+                .sort((a, b) => a.date - b.date);
+
+            // График температуры
+            createChart('temperatureChart', {
+                labels: chartData.map(d => d.date.toLocaleString('ru-RU', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })),
+                datasets: [{
+                    label: 'Температура (°C)',
+                    data: chartData.map(d => d.t),
+                    borderColor: 'rgb(239, 68, 68)',
+                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }]
+            }, 'line');
+
+            // График влажности
+            createChart('humidityChart', {
+                labels: chartData.map(d => d.date.toLocaleString('ru-RU', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })),
+                datasets: [{
+                    label: 'Влажность (%)',
+                    data: chartData.map(d => d.h),
+                    borderColor: 'rgb(59, 130, 246)',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }]
+            }, 'line');
+
+            // График pH
+            createChart('phChart', {
+                labels: chartData.map(d => d.date.toLocaleString('ru-RU', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })),
+                datasets: [{
+                    label: 'pH',
+                    data: chartData.map(d => d.ph),
+                    borderColor: 'rgb(168, 85, 247)',
+                    backgroundColor: 'rgba(168, 85, 247, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }]
+            }, 'line');
+
+            // График NPK
+            createChart('npkChart', {
+                labels: chartData.map(d => d.date.toLocaleString('ru-RU', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })),
+                datasets: [
+                    {
+                        label: 'Азот (N) mg/kg',
+                        data: chartData.map(d => d.n),
+                        borderColor: 'rgb(34, 197, 94)',
+                        backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    },
+                    {
+                        label: 'Фосфор (P) mg/kg',
+                        data: chartData.map(d => d.p),
+                        borderColor: 'rgb(251, 146, 60)',
+                        backgroundColor: 'rgba(251, 146, 60, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    },
+                    {
+                        label: 'Калий (K) mg/kg',
+                        data: chartData.map(d => d.k),
+                        borderColor: 'rgb(147, 51, 234)',
+                        backgroundColor: 'rgba(147, 51, 234, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }
+                ]
+            }, 'line');
+
+            // График всех параметров (нормализованный)
+            const maxT = Math.max(...chartData.map(d => d.t));
+            const maxH = Math.max(...chartData.map(d => d.h));
+            const maxPH = Math.max(...chartData.map(d => d.ph));
+            const maxN = Math.max(...chartData.map(d => d.n));
+            const maxP = Math.max(...chartData.map(d => d.p));
+            const maxK = Math.max(...chartData.map(d => d.k));
+
+            createChart('allChart', {
+                labels: chartData.map(d => d.date.toLocaleString('ru-RU', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })),
+                datasets: [
+                    {
+                        label: 'Температура (норм.)',
+                        data: chartData.map(d => (d.t / maxT) * 100),
+                        borderColor: 'rgb(239, 68, 68)',
+                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                        tension: 0.4,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: 'Влажность (норм.)',
+                        data: chartData.map(d => (d.h / maxH) * 100),
+                        borderColor: 'rgb(59, 130, 246)',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        tension: 0.4,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: 'pH (норм.)',
+                        data: chartData.map(d => (d.ph / maxPH) * 100),
+                        borderColor: 'rgb(168, 85, 247)',
+                        backgroundColor: 'rgba(168, 85, 247, 0.1)',
+                        tension: 0.4,
+                        yAxisID: 'y'
+                    }
+                ]
+            }, 'line');
+        }
+
+        // Создание графика
+        function createChart(canvasId, data, type) {
+            const canvas = document.getElementById(canvasId);
+            if (!canvas) return;
+
+            // Удаляем старый график если есть
+            if (charts[canvasId]) {
+                charts[canvasId].destroy();
+            }
+
+            const ctx = canvas.getContext('2d');
+            charts[canvasId] = new Chart(ctx, {
+                type: type,
+                data: data,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false
+                        }
+                    },
+                    scales: {
+                        x: {
+                            display: true,
+                            grid: {
+                                display: false
+                            }
+                        },
+                        y: {
+                            display: true,
+                            beginAtZero: false,
+                            grid: {
+                                color: 'rgba(0, 0, 0, 0.05)'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Переключение вкладок
+        function showTab(tabName) {
+            // Обновляем активную вкладку
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            event.target.classList.add('active');
+
+            // Скрываем все секции
+            document.querySelectorAll('.chart-section').forEach(section => {
+                section.style.display = 'none';
+            });
+
+            // Показываем выбранную секцию
+            document.getElementById(tabName + '-section').style.display = 'block';
+        }
+
+        // Автообновление каждые 30 секунд
+        loadData();
+        setInterval(loadData, 30000);
+    </script>
+</body>
+</html>
+
