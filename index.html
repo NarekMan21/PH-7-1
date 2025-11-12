@@ -574,10 +574,13 @@
             document.getElementById(tabName + '-tab').classList.add('active');
 
             if (tabName === 'charts') {
-                if (selectedSensorIp) {
-                    loadSensorChartData(selectedSensorIp);
-                } else {
+                // Если selectedSensorIp не установлен или это прямой клик на вкладку, показываем все датчики
+                if (!selectedSensorIp) {
                     loadAllSensorsChartData();
+                } else {
+                    // Если selectedSensorIp установлен (клик на карточку), показываем конкретный датчик
+                    const sensorName = `Датчик ${selectedSensorIp}`;
+                    loadSensorChartData(selectedSensorIp, sensorName);
                 }
             }
         }
@@ -804,9 +807,12 @@
         // Загрузка данных для сравнения всех датчиков
         async function loadAllSensorsChartData() {
             try {
+                // Сбрасываем selectedSensorIp при загрузке всех датчиков
+                selectedSensorIp = null;
+                
                 // Обновляем заголовок
-                document.getElementById('charts-title').textContent = 'Графики датчика';
-                document.getElementById('charts-subtitle').textContent = 'Все данные из базы';
+                document.getElementById('charts-title').textContent = 'Сравнение всех датчиков';
+                document.getElementById('charts-subtitle').textContent = 'Графики всех датчиков из базы данных';
                 document.getElementById('back-to-all').style.display = 'none';
                 document.getElementById('stats-grid').style.display = 'grid';
 
@@ -815,19 +821,29 @@
                 const result = await response.json();
                 const historyData = result.data || result || [];
                 
+                console.log('📊 Загрузка данных для сравнения всех датчиков');
+                console.log(`   Всего записей в базе: ${historyData.length}`);
+                
                 // Формируем данные для графиков
-                allData = historyData.map(record => ({
-                    timestamp: new Date(record.timestamp || record.date).getTime(),
-                    date: new Date(record.timestamp || record.date),
-                    ip: record.ip || 'unknown',
-                    ...record
-                }));
+                allData = historyData
+                    .filter(d => d.v === true && d.ip)
+                    .map(record => ({
+                        timestamp: new Date(record.timestamp || record.date).getTime(),
+                        date: new Date(record.timestamp || record.date),
+                        ip: record.ip || 'unknown',
+                        ...record
+                    }));
                 
                 // Сортируем по времени
                 allData.sort((a, b) => a.timestamp - b.timestamp);
 
+                // Получаем уникальные IP адреса
+                const uniqueIPs = [...new Set(allData.map(d => d.ip))];
+                console.log(`   Уникальных датчиков: ${uniqueIPs.length}`);
+                console.log(`   IP адреса: ${uniqueIPs.join(', ')}`);
+
                 updateStats();
-                createCharts();
+                createAllSensorsCharts();
             } catch (error) {
                 console.error('Ошибка загрузки данных всех датчиков:', error);
             }
@@ -846,7 +862,7 @@
             }
         }
 
-        // Создание графиков
+        // Создание графиков для одного датчика
         function createCharts() {
             const chartData = allData
                 .filter(d => d.v === true)
@@ -970,6 +986,293 @@
             }, 'line');
         }
 
+        // Создание графиков для сравнения всех датчиков
+        function createAllSensorsCharts() {
+            if (allData.length === 0) {
+                console.log('⚠️ Нет данных для создания графиков');
+                return;
+            }
+
+            // Группируем данные по IP адресам
+            const sensorsData = {};
+            allData.forEach(d => {
+                const ip = d.ip || 'unknown';
+                if (!sensorsData[ip]) {
+                    sensorsData[ip] = [];
+                }
+                sensorsData[ip].push({
+                    date: new Date(d.timestamp || d.date),
+                    t: d.t,
+                    h: d.h,
+                    ph: d.ph,
+                    n: d.n,
+                    p: d.p,
+                    k: d.k,
+                    ec: d.ec
+                });
+            });
+
+            console.log(`📈 Создание графиков для ${Object.keys(sensorsData).length} датчиков`);
+            Object.keys(sensorsData).forEach(ip => {
+                console.log(`   Датчик ${ip}: ${sensorsData[ip].length} записей`);
+            });
+
+            // Сортируем данные по времени для каждого датчика
+            Object.values(sensorsData).forEach(sd => {
+                sd.sort((a, b) => a.date - b.date);
+            });
+
+            // Цвета для датчиков
+            const colors = [
+                { border: 'rgba(239, 68, 68, 1)', bg: 'rgba(239, 68, 68, 0.1)' },   // Красный
+                { border: 'rgba(59, 130, 246, 1)', bg: 'rgba(59, 130, 246, 0.1)' }, // Синий
+                { border: 'rgba(34, 197, 94, 1)', bg: 'rgba(34, 197, 94, 0.1)' },    // Зеленый
+                { border: 'rgba(168, 85, 247, 1)', bg: 'rgba(168, 85, 247, 0.1)' },  // Фиолетовый
+                { border: 'rgba(251, 146, 60, 1)', bg: 'rgba(251, 146, 60, 0.1)' },  // Оранжевый
+                { border: 'rgba(147, 51, 234, 1)', bg: 'rgba(147, 51, 234, 0.1)' },  // Фиолетовый 2
+                { border: 'rgba(236, 72, 153, 1)', bg: 'rgba(236, 72, 153, 0.1)' },  // Розовый
+                { border: 'rgba(14, 165, 233, 1)', bg: 'rgba(14, 165, 233, 0.1)' },  // Голубой
+                { border: 'rgba(20, 184, 166, 1)', bg: 'rgba(20, 184, 166, 0.1)' },  // Бирюзовый
+                { border: 'rgba(245, 158, 11, 1)', bg: 'rgba(245, 158, 11, 0.1)' }   // Желтый
+            ];
+
+            // Получаем все уникальные временные метки
+            const allTimestamps = new Set();
+            Object.values(sensorsData).forEach(sd => {
+                sd.forEach(d => {
+                    allTimestamps.add(d.date.getTime());
+                });
+            });
+            const sortedTimestamps = Array.from(allTimestamps).sort((a, b) => a - b);
+            const labels = sortedTimestamps.map(ts => {
+                const date = new Date(ts);
+                return date.toLocaleString('ru-RU', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+            });
+
+            // График температуры - сравнение всех датчиков
+            const tempDatasets = Object.entries(sensorsData).map(([ip, data], index) => {
+                // Используем более гибкое сопоставление - ищем ближайшую точку в пределах 30 секунд
+                const dataPoints = sortedTimestamps.map(ts => {
+                    // Точное совпадение
+                    let point = data.find(d => d.date.getTime() === ts);
+                    if (!point) {
+                        // Ищем ближайшую точку в пределах 30 секунд
+                        const timeWindow = 30 * 1000; // 30 секунд в миллисекундах
+                        point = data.find(d => {
+                            const diff = Math.abs(d.date.getTime() - ts);
+                            return diff <= timeWindow;
+                        });
+                    }
+                    return point ? point.t : null;
+                });
+                const nonNullPoints = dataPoints.filter(p => p !== null).length;
+                console.log(`   График температуры - Датчик ${ip}: ${nonNullPoints} точек данных из ${sortedTimestamps.length} временных меток`);
+                return {
+                    label: `Датчик ${ip}`,
+                    data: dataPoints,
+                    borderColor: colors[index % colors.length].border,
+                    backgroundColor: colors[index % colors.length].bg,
+                    tension: 0.4,
+                    fill: false,
+                    spanGaps: true  // Позволяет рисовать линию через пропуски
+                };
+            });
+
+            console.log(`   Создание графика температуры с ${tempDatasets.length} датчиками`);
+            createChart('temperatureChart', {
+                labels: labels,
+                datasets: tempDatasets
+            }, 'line');
+
+            // График влажности - сравнение всех датчиков
+            const humidityDatasets = Object.entries(sensorsData).map(([ip, data], index) => {
+                const dataPoints = sortedTimestamps.map(ts => {
+                    let point = data.find(d => d.date.getTime() === ts);
+                    if (!point) {
+                        const timeWindow = 30 * 1000;
+                        point = data.find(d => {
+                            const diff = Math.abs(d.date.getTime() - ts);
+                            return diff <= timeWindow;
+                        });
+                    }
+                    return point ? point.h : null;
+                });
+                return {
+                    label: `Датчик ${ip}`,
+                    data: dataPoints,
+                    borderColor: colors[index % colors.length].border,
+                    backgroundColor: colors[index % colors.length].bg,
+                    tension: 0.4,
+                    fill: false,
+                    spanGaps: true
+                };
+            });
+
+            createChart('humidityChart', {
+                labels: labels,
+                datasets: humidityDatasets
+            }, 'line');
+
+            // График pH - сравнение всех датчиков
+            const phDatasets = Object.entries(sensorsData).map(([ip, data], index) => {
+                const dataPoints = sortedTimestamps.map(ts => {
+                    let point = data.find(d => d.date.getTime() === ts);
+                    if (!point) {
+                        const timeWindow = 30 * 1000;
+                        point = data.find(d => {
+                            const diff = Math.abs(d.date.getTime() - ts);
+                            return diff <= timeWindow;
+                        });
+                    }
+                    return point ? point.ph : null;
+                });
+                return {
+                    label: `Датчик ${ip}`,
+                    data: dataPoints,
+                    borderColor: colors[index % colors.length].border,
+                    backgroundColor: colors[index % colors.length].bg,
+                    tension: 0.4,
+                    fill: false,
+                    spanGaps: true
+                };
+            });
+
+            createChart('phChart', {
+                labels: labels,
+                datasets: phDatasets
+            }, 'line');
+
+            // График NPK - сравнение всех датчиков
+            const npkDatasets = [];
+            Object.entries(sensorsData).forEach(([ip, data], index) => {
+                const color = colors[index % colors.length];
+                const findPoint = (ts) => {
+                    let point = data.find(d => d.date.getTime() === ts);
+                    if (!point) {
+                        const timeWindow = 30 * 1000;
+                        point = data.find(d => {
+                            const diff = Math.abs(d.date.getTime() - ts);
+                            return diff <= timeWindow;
+                        });
+                    }
+                    return point;
+                };
+                const nDataPoints = sortedTimestamps.map(ts => {
+                    const point = findPoint(ts);
+                    return point ? point.n : null;
+                });
+                const pDataPoints = sortedTimestamps.map(ts => {
+                    const point = findPoint(ts);
+                    return point ? point.p : null;
+                });
+                const kDataPoints = sortedTimestamps.map(ts => {
+                    const point = findPoint(ts);
+                    return point ? point.k : null;
+                });
+                npkDatasets.push(
+                    {
+                        label: `Датчик ${ip} - N`,
+                        data: nDataPoints,
+                        borderColor: color.border,
+                        backgroundColor: color.bg,
+                        tension: 0.4,
+                        fill: false,
+                        spanGaps: true
+                    },
+                    {
+                        label: `Датчик ${ip} - P`,
+                        data: pDataPoints,
+                        borderColor: color.border,
+                        backgroundColor: color.bg,
+                        borderDash: [5, 5],
+                        tension: 0.4,
+                        fill: false,
+                        spanGaps: true
+                    },
+                    {
+                        label: `Датчик ${ip} - K`,
+                        data: kDataPoints,
+                        borderColor: color.border,
+                        backgroundColor: color.bg,
+                        borderDash: [10, 5],
+                        tension: 0.4,
+                        fill: false,
+                        spanGaps: true
+                    }
+                );
+            });
+
+            createChart('npkChart', {
+                labels: labels,
+                datasets: npkDatasets
+            }, 'line');
+
+            // График всех параметров - сравнение всех датчиков
+            const allDatasets = [];
+            Object.entries(sensorsData).forEach(([ip, data], index) => {
+                const color = colors[index % colors.length];
+                const findPoint = (ts) => {
+                    let point = data.find(d => d.date.getTime() === ts);
+                    if (!point) {
+                        const timeWindow = 30 * 1000;
+                        point = data.find(d => {
+                            const diff = Math.abs(d.date.getTime() - ts);
+                            return diff <= timeWindow;
+                        });
+                    }
+                    return point;
+                };
+                const tDataPoints = sortedTimestamps.map(ts => {
+                    const point = findPoint(ts);
+                    return point ? point.t : null;
+                });
+                const hDataPoints = sortedTimestamps.map(ts => {
+                    const point = findPoint(ts);
+                    return point ? point.h : null;
+                });
+                const phDataPoints = sortedTimestamps.map(ts => {
+                    const point = findPoint(ts);
+                    return point ? point.ph : null;
+                });
+                allDatasets.push(
+                    {
+                        label: `Датчик ${ip} - Температура`,
+                        data: tDataPoints,
+                        borderColor: color.border,
+                        backgroundColor: color.bg,
+                        tension: 0.4,
+                        fill: false,
+                        spanGaps: true
+                    },
+                    {
+                        label: `Датчик ${ip} - Влажность`,
+                        data: hDataPoints,
+                        borderColor: color.border,
+                        backgroundColor: color.bg,
+                        borderDash: [5, 5],
+                        tension: 0.4,
+                        fill: false,
+                        spanGaps: true
+                    },
+                    {
+                        label: `Датчик ${ip} - pH`,
+                        data: phDataPoints,
+                        borderColor: color.border,
+                        backgroundColor: color.bg,
+                        borderDash: [10, 5],
+                        tension: 0.4,
+                        fill: false,
+                        spanGaps: true
+                    }
+                );
+            });
+
+            createChart('allChart', {
+                labels: labels,
+                datasets: allDatasets
+            }, 'line');
+        }
+
 
         // Создание графика
         function createChart(canvasId, data, type) {
@@ -980,6 +1283,17 @@
                 charts[canvasId].destroy();
             }
 
+            // Обновляем все datasets - убираем точки и делаем линии тоньше
+            if (data.datasets) {
+                data.datasets = data.datasets.map(dataset => ({
+                    ...dataset,
+                    pointRadius: 0,           // Убираем точки
+                    pointHoverRadius: 0,       // Убираем точки при наведении
+                    borderWidth: 2,           // Тонкие линии (было по умолчанию 3)
+                    fill: dataset.fill !== undefined ? dataset.fill : false  // Сохраняем настройку fill
+                }));
+            }
+
             const ctx = canvas.getContext('2d');
             charts[canvasId] = new Chart(ctx, {
                 type: type,
@@ -987,6 +1301,11 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    elements: {
+                        line: {
+                            spanGaps: true  // Рисуем линию через пропуски (null значения)
+                        }
+                    },
                     plugins: {
                         legend: {
                             labels: {
