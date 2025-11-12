@@ -16,9 +16,6 @@ app.use(cors());
 app.use(express.json());
 app.set('trust proxy', true);
 
-// На Vercel статические файлы обслуживаются автоматически через vercel.json
-// Здесь только API endpoints
-
 // Инициализация файла данных (fallback для локальной разработки)
 if (!USE_SUPABASE) {
   if (!fs.existsSync('/tmp')) {
@@ -313,6 +310,35 @@ app.delete('/clear', async (req, res) => {
   } catch (error) {
     console.error('❌ Ошибка очистки:', error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+// Обработка всех остальных запросов (статические файлы и HTML)
+// ВАЖНО: Этот маршрут должен быть ПОСЛЕ всех API маршрутов
+app.get('*', (req, res) => {
+  const requestedPath = req.path === '/' ? 'index.html' : req.path;
+  const filePath = path.join(__dirname, '..', requestedPath);
+  
+  console.log(`📄 Запрос статического файла: ${req.path} -> ${filePath}`);
+  
+  // Проверяем существование файла
+  if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+    console.log(`✅ Файл найден: ${filePath}`);
+    res.sendFile(filePath);
+  } else if (req.path === '/' || req.path === '/index.html') {
+    // Если запрашивается корень или index.html, отдаем index.html
+    const indexPath = path.join(__dirname, '..', 'index.html');
+    if (fs.existsSync(indexPath)) {
+      console.log(`✅ Отдаем index.html: ${indexPath}`);
+      res.sendFile(indexPath);
+    } else {
+      console.error(`❌ index.html не найден: ${indexPath}`);
+      res.status(404).json({ error: 'index.html not found' });
+    }
+  } else {
+    // Если файл не найден, возвращаем 404
+    console.error(`❌ Файл не найден: ${filePath}`);
+    res.status(404).json({ error: 'Not Found', path: req.path });
   }
 });
 
