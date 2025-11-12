@@ -1,24 +1,38 @@
+// Vercel Serverless Function - точка входа для всех API запросов
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const cors = require('cors');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
-// На Vercel используем /tmp для временных файлов, иначе локальную директорию
-const DATA_FILE = process.env.VERCEL 
-  ? path.join('/tmp', 'sensor_data.json')
-  : path.join(__dirname, 'sensor_data.json');
+const DATA_FILE = path.join('/tmp', 'sensor_data.json');
 
 // Middleware
 app.use(cors());
 app.use(express.json());
-app.set('trust proxy', true);  // ДОБАВИТЬ ЭТУ СТРОКУ - для правильного получения IP
-app.use(express.static(__dirname));
+app.set('trust proxy', true);
+// Статические файлы обслуживаются Vercel автоматически, но оставляем для совместимости
+if (process.env.VERCEL) {
+  // На Vercel статические файлы обслуживаются через vercel.json routes
+  // Здесь только API endpoints
+} else {
+  app.use(express.static(path.join(__dirname, '..')));
+}
 
 // Инициализация файла данных
+if (!fs.existsSync('/tmp')) {
+  try {
+    fs.mkdirSync('/tmp', { recursive: true });
+  } catch (e) {
+    console.error('Не удалось создать /tmp:', e.message);
+  }
+}
 if (!fs.existsSync(DATA_FILE)) {
-  fs.writeFileSync(DATA_FILE, JSON.stringify([]));
+  try {
+    fs.writeFileSync(DATA_FILE, JSON.stringify([]));
+  } catch (e) {
+    console.error('Не удалось создать файл данных:', e.message);
+  }
 }
 
 // Сохранение данных от ESP8266
@@ -32,17 +46,13 @@ app.post('/save', (req, res) => {
     const cleanIp = clientIp.replace(/^::ffff:/, '').split(',')[0].trim();
     
     console.log('📥 Получены данные от ESP8266:', JSON.stringify(data));
-    console.log('   IP отправителя (raw):', clientIp);
-    console.log('   IP отправителя (clean):', cleanIp);
-    console.log('   req.ip:', req.ip);
-    console.log('   req.connection.remoteAddress:', req.connection?.remoteAddress);
-    console.log('   req.socket.remoteAddress:', req.socket?.remoteAddress);
+    console.log('   IP отправителя:', cleanIp);
     
     // Добавляем timestamp и IP
     const record = {
       timestamp: new Date().toISOString(),
       date: new Date().toLocaleString('ru-RU'),
-      ip: cleanIp,  // ДОБАВЛЯЕМ IP-АДРЕС
+      ip: cleanIp,
       ...data
     };
     
@@ -57,7 +67,6 @@ app.post('/save', (req, res) => {
       } catch (parseError) {
         console.error('⚠️ Ошибка парсинга файла данных, инициализируем пустым массивом:', parseError.message);
         history = [];
-        // Восстанавливаем файл
         fs.writeFileSync(DATA_FILE, JSON.stringify([]));
       }
     }
@@ -74,7 +83,6 @@ app.post('/save', (req, res) => {
     fs.writeFileSync(DATA_FILE, JSON.stringify(history, null, 2));
     
     console.log(`✅ Данные сохранены. Всего записей: ${history.length}`);
-    console.log(`   IP: ${cleanIp}, Температура: ${data.t}°C, Влажность: ${data.h}%, pH: ${data.ph}`);
     res.json({ success: true, count: history.length });
   } catch (error) {
     console.error('❌ Ошибка сохранения:', error);
@@ -305,34 +313,6 @@ app.delete('/clear', (req, res) => {
   }
 });
 
-// Запуск сервера (только для локальной разработки)
-// На Vercel используется serverless функция из api/index.js
-if (!process.env.VERCEL) {
-  app.listen(PORT, () => {
-    console.log(`\n🚀 Бэкенд запущен на http://localhost:${PORT}`);
-    console.log(`📁 Данные сохраняются в: ${DATA_FILE}`);
-    console.log(`📁 Абсолютный путь: ${path.resolve(DATA_FILE)}`);
-    console.log(`📁 Файл существует: ${fs.existsSync(DATA_FILE) ? '✅ Да' : '❌ Нет'}`);
-    if (fs.existsSync(DATA_FILE)) {
-      try {
-        const fileContent = fs.readFileSync(DATA_FILE, 'utf8').trim();
-        const data = fileContent ? JSON.parse(fileContent) : [];
-        console.log(`📁 Записей в файле: ${Array.isArray(data) ? data.length : 'Ошибка: не массив'}`);
-      } catch (e) {
-        console.log(`📁 Ошибка чтения файла: ${e.message}`);
-      }
-    }
-    console.log(`\n📡 Эндпоинты:`);
-    console.log(`   GET  /api - Текущие данные (последняя запись)`);
-    console.log(`   POST /save - Сохранение данных от ESP8266`);
-    console.log(`   GET  /history - Получение истории`);
-    console.log(`   GET  /export/csv - Экспорт в CSV`);
-    console.log(`   GET  /export/json - Экспорт в JSON`);
-    console.log(`   GET  /stats - Статистика`);
-    console.log(`   DELETE /clear - Очистка данных`);
-    console.log(`\n📊 Веб-интерфейсы:`);
-    console.log(`   http://localhost:${PORT}/charts.html - Графики данных`);
-    console.log(`   http://localhost:${PORT}/index.html - Текущие показания\n`);
-  });
-}
+// Экспорт для Vercel Serverless Function
+module.exports = app;
 

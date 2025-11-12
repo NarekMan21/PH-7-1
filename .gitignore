@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# Data files
+sensor_data.json
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment
+.env
+.env.local
+
+# Vercel
+.vercel
+
