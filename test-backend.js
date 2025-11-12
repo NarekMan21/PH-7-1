@@ -228,43 +228,114 @@ async function testSaveMultipleIPs() {
   return allSaved;
 }
 
-// Тест 3: Чтение истории
+// Тест 3: Детальное чтение истории
 async function testReadHistory() {
-  log('\n=== Тест 3: Чтение истории ===', 'cyan');
+  log('\n=== Тест 3: Чтение истории (детальная проверка) ===', 'cyan');
   
   try {
     const response = await sendGetRequest('/history');
     
-    if (response.status === 200) {
-      const data = response.data;
-      
-      // Проверяем формат ответа
-      const hasTotal = typeof data.total === 'number';
-      const hasCount = typeof data.count === 'number';
-      const hasData = Array.isArray(data.data);
-      
-      log(`✅ GET /history успешно`, 'green');
-      log(`  - total: ${hasTotal ? '✅' : '❌'} (${data.total})`, hasTotal ? 'green' : 'red');
-      log(`  - count: ${hasCount ? '✅' : '❌'} (${data.count})`, hasCount ? 'green' : 'red');
-      log(`  - data: ${hasData ? '✅' : '❌'} (${data.data.length} записей)`, hasData ? 'green' : 'red');
-      
-      if (hasData && data.data.length > 0) {
-        const firstRecord = data.data[0];
-        const requiredFields = ['timestamp', 'date', 'ip', 't', 'h', 'ph', 'v'];
-        const missingFields = requiredFields.filter(field => !(field in firstRecord));
-        
-        if (missingFields.length === 0) {
-          log(`  - Все обязательные поля присутствуют ✅`, 'green');
-        } else {
-          log(`  - Отсутствуют поля: ${missingFields.join(', ')} ❌`, 'red');
-        }
-      }
-      
-      return hasTotal && hasCount && hasData;
-    } else {
-      log(`❌ GET /history вернул ошибку: ${response.status}`, 'red');
+    if (response.status !== 200) {
+      log(`❌ GET /history вернул статус ${response.status}`, 'red');
       return false;
     }
+    
+    const data = response.data;
+    let allChecksPassed = true;
+    
+    // 1. Проверка структуры ответа
+    log(`\n📋 Проверка структуры ответа:`, 'blue');
+    const hasTotal = typeof data.total === 'number';
+    const hasCount = typeof data.count === 'number';
+    const hasData = Array.isArray(data.data);
+    
+    log(`  - total (number): ${hasTotal ? '✅' : '❌'} (${data.total})`, hasTotal ? 'green' : 'red');
+    log(`  - count (number): ${hasCount ? '✅' : '❌'} (${data.count})`, hasCount ? 'green' : 'red');
+    log(`  - data (array): ${hasData ? '✅' : '❌'} (${data.data?.length || 0} записей)`, hasData ? 'green' : 'red');
+    
+    if (!hasTotal || !hasCount || !hasData) {
+      allChecksPassed = false;
+    }
+    
+    // 2. Проверка логической согласованности
+    log(`\n📊 Проверка логической согласованности:`, 'blue');
+    if (hasTotal && hasCount && hasData) {
+      const totalMatches = data.total === data.data.length;
+      const countMatches = data.count === data.data.length;
+      
+      log(`  - total === data.length: ${totalMatches ? '✅' : '❌'} (${data.total} === ${data.data.length})`, totalMatches ? 'green' : 'red');
+      log(`  - count === data.length: ${countMatches ? '✅' : '❌'} (${data.count} === ${data.data.length})`, countMatches ? 'green' : 'red');
+      
+      if (!totalMatches || !countMatches) {
+        allChecksPassed = false;
+      }
+    }
+    
+    // 3. Проверка формата записей
+    if (hasData && data.data.length > 0) {
+      log(`\n📝 Проверка формата записей:`, 'blue');
+      const firstRecord = data.data[0];
+      const requiredFields = ['timestamp', 'date', 'ip', 't', 'h', 'ec', 'ph', 'n', 'p', 'k', 'v'];
+      const missingFields = requiredFields.filter(field => !(field in firstRecord));
+      
+      if (missingFields.length === 0) {
+        log(`  - Все обязательные поля присутствуют ✅`, 'green');
+      } else {
+        log(`  - Отсутствуют поля: ${missingFields.join(', ')} ❌`, 'red');
+        allChecksPassed = false;
+      }
+      
+      // Проверка типов данных
+      log(`\n🔍 Проверка типов данных в записях:`, 'blue');
+      const typeChecks = [
+        { field: 'timestamp', type: 'string', value: firstRecord.timestamp },
+        { field: 'date', type: 'string', value: firstRecord.date },
+        { field: 'ip', type: 'string', value: firstRecord.ip },
+        { field: 't', type: 'number', value: firstRecord.t },
+        { field: 'h', type: 'number', value: firstRecord.h },
+        { field: 'ec', type: 'number', value: firstRecord.ec },
+        { field: 'ph', type: 'number', value: firstRecord.ph },
+        { field: 'n', type: 'number', value: firstRecord.n },
+        { field: 'p', type: 'number', value: firstRecord.p },
+        { field: 'k', type: 'number', value: firstRecord.k },
+        { field: 'v', type: 'boolean', value: firstRecord.v }
+      ];
+      
+      typeChecks.forEach(check => {
+        const isValid = typeof check.value === check.type;
+        log(`  - ${check.field} (${check.type}): ${isValid ? '✅' : '❌'}`, isValid ? 'green' : 'red');
+        if (!isValid) {
+          allChecksPassed = false;
+        }
+      });
+      
+      // Проверка нескольких записей (если есть)
+      if (data.data.length > 1) {
+        log(`\n🔍 Проверка нескольких записей (${Math.min(3, data.data.length)} из ${data.data.length}):`, 'blue');
+        for (let i = 0; i < Math.min(3, data.data.length); i++) {
+          const record = data.data[i];
+          const hasAllFields = requiredFields.every(field => field in record);
+          log(`  - Запись ${i + 1}: ${hasAllFields ? '✅' : '❌'}`, hasAllFields ? 'green' : 'red');
+          if (!hasAllFields) {
+            allChecksPassed = false;
+          }
+        }
+      }
+    } else {
+      log(`\n⚠️ База данных пуста, проверка формата записей пропущена`, 'yellow');
+    }
+    
+    // 4. Проверка пустой базы данных
+    if (data.total === 0) {
+      log(`\n📭 Тест пустой базы данных:`, 'blue');
+      const emptyCheck = data.count === 0 && Array.isArray(data.data) && data.data.length === 0;
+      log(`  - Пустая база обработана корректно: ${emptyCheck ? '✅' : '❌'}`, emptyCheck ? 'green' : 'red');
+      if (!emptyCheck) {
+        allChecksPassed = false;
+      }
+    }
+    
+    return allChecksPassed;
   } catch (error) {
     log(`❌ Ошибка при чтении истории: ${error.message}`, 'red');
     return false;

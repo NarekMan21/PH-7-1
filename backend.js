@@ -165,8 +165,12 @@ app.get('/history', (req, res) => {
     }
     
     // Опциональные параметры фильтрации
-    const limit = parseInt(req.query.limit) || history.length;
-    const offset = parseInt(req.query.offset) || 0;
+    const limitParam = parseInt(req.query.limit);
+    const offsetParam = parseInt(req.query.offset);
+    
+    // Обрабатываем отрицательные и невалидные значения
+    const limit = (isNaN(limitParam) || limitParam <= 0) ? history.length : limitParam;
+    const offset = (isNaN(offsetParam) || offsetParam < 0) ? 0 : offsetParam;
     
     const filtered = history.slice(offset, offset + limit);
     
