@@ -32,6 +32,35 @@
             background: rgba(255, 255, 255, 0.1);
             border-radius: 15px;
             backdrop-filter: blur(10px);
+            position: relative;
+        }
+
+        .download-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            background: rgba(76, 175, 80, 0.8);
+            border: none;
+            border-radius: 8px;
+            color: #fff;
+            font-size: 0.9em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .download-btn:hover {
+            background: rgba(76, 175, 80, 1);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .download-btn:active {
+            transform: translateY(0);
         }
 
         .header h1 {
@@ -446,6 +475,9 @@
 <body>
     <div class="container">
         <div class="header">
+            <button class="download-btn" onclick="downloadDatabase()" title="Скачать базу данных">
+                💾 Скачать БД
+            </button>
             <h1>🌱 PH-7-1 Датчик почвы</h1>
             <p>Мониторинг параметров почвы в реальном времени</p>
             <div id="status" class="status offline">ОФЛАЙН</div>
@@ -1435,6 +1467,59 @@
                 } else if (!selectedSensorIp) {
                     // Если открыто сравнение всех датчиков, обновляем его
                     loadAllSensorsChartData();
+                }
+            }
+        }
+
+        // Функция скачивания базы данных
+        async function downloadDatabase() {
+            try {
+                const btn = event.target.closest('.download-btn');
+                if (btn) {
+                    btn.disabled = true;
+                    btn.textContent = '⏳ Загрузка...';
+                }
+
+                // Скачиваем JSON версию базы данных
+                const response = await fetch('/export/json');
+                
+                if (!response.ok) {
+                    throw new Error(`Ошибка: ${response.status} ${response.statusText}`);
+                }
+
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `sensor_data_${new Date().toISOString().split('T')[0]}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = '💾 Скачать БД';
+                }
+
+                // Показываем уведомление об успехе
+                const notification = document.createElement('div');
+                notification.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #4caf50; color: white; padding: 15px 20px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); z-index: 10000; font-weight: 600;';
+                notification.textContent = '✅ База данных скачана!';
+                document.body.appendChild(notification);
+                setTimeout(() => {
+                    notification.style.opacity = '0';
+                    notification.style.transition = 'opacity 0.3s';
+                    setTimeout(() => document.body.removeChild(notification), 300);
+                }, 2000);
+            } catch (error) {
+                console.error('Ошибка скачивания базы данных:', error);
+                alert('Ошибка при скачивании базы данных: ' + error.message);
+                
+                const btn = event.target.closest('.download-btn');
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = '💾 Скачать БД';
                 }
             }
         }

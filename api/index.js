@@ -3,9 +3,13 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const cors = require('cors');
+const db = require('../lib/db');
 
 const app = express();
 const DATA_FILE = path.join('/tmp', 'sensor_data.json');
+
+// Проверяем, используется ли Supabase
+const USE_SUPABASE = !!(process.env.SUPABASE_URL && process.env.SUPABASE_KEY);
 
 // Middleware
 app.use(cors());
@@ -19,24 +23,63 @@ if (process.env.VERCEL) {
   app.use(express.static(path.join(__dirname, '..')));
 }
 
-// Инициализация файла данных
-if (!fs.existsSync('/tmp')) {
-  try {
-    fs.mkdirSync('/tmp', { recursive: true });
-  } catch (e) {
-    console.error('Не удалось создать /tmp:', e.message);
+// Инициализация файла данных (fallback для локальной разработки)
+if (!USE_SUPABASE) {
+  if (!fs.existsSync('/tmp')) {
+    try {
+      fs.mkdirSync('/tmp', { recursive: true });
+    } catch (e) {
+      console.error('Не удалось создать /tmp:', e.message);
+    }
+  }
+  if (!fs.existsSync(DATA_FILE)) {
+    try {
+      fs.writeFileSync(DATA_FILE, JSON.stringify([]));
+    } catch (e) {
+      console.error('Не удалось создать файл данных:', e.message);
+    }
   }
 }
-if (!fs.existsSync(DATA_FILE)) {
+
+// Инициализация Supabase
+if (USE_SUPABASE) {
+  db.initSupabase();
+  console.log('✅ Используется Supabase для хранения данных');
+} else {
+  console.log('⚠️ Используется файловое хранилище (fallback)');
+}
+
+// Вспомогательная функция для чтения из файла (fallback)
+function readFromFile() {
+  if (!fs.existsSync(DATA_FILE)) {
+    return [];
+  }
   try {
-    fs.writeFileSync(DATA_FILE, JSON.stringify([]));
-  } catch (e) {
-    console.error('Не удалось создать файл данных:', e.message);
+    const fileContent = fs.readFileSync(DATA_FILE, 'utf8').trim();
+    if (!fileContent) {
+      return [];
+    }
+    const data = JSON.parse(fileContent);
+    return Array.isArray(data) ? data : [];
+  } catch (error) {
+    console.error('⚠️ Ошибка чтения файла:', error.message);
+    return [];
+  }
+}
+
+// Вспомогательная функция для записи в файл (fallback)
+function writeToFile(data) {
+  try {
+    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+    return true;
+  } catch (error) {
+    console.error('⚠️ Ошибка записи файла:', error.message);
+    return false;
   }
 }
 
 // Сохранение данных от ESP8266
-app.post('/save', (req, res) => {
+app.post('/save', async (req, res) => {
   try {
     const data = req.body;
     
@@ -56,34 +99,30 @@ app.post('/save', (req, res) => {
       ...data
     };
     
-    // Читаем существующие данные
-    let history = [];
-    if (fs.existsSync(DATA_FILE)) {
-      try {
-        const fileContent = fs.readFileSync(DATA_FILE, 'utf8').trim();
-        if (fileContent) {
-          history = JSON.parse(fileContent);
-        }
-      } catch (parseError) {
-        console.error('⚠️ Ошибка парсинга файла данных, инициализируем пустым массивом:', parseError.message);
-        history = [];
-        fs.writeFileSync(DATA_FILE, JSON.stringify([]));
+    if (USE_SUPABASE) {
+      // Сохраняем в Supabase
+      const success = await db.saveRecord(record);
+      if (!success) {
+        return res.status(500).json({ success: false, error: 'Ошибка сохранения в базу данных' });
       }
+      
+      const count = await db.getRecordsCount();
+      console.log(`✅ Данные сохранены в Supabase. Всего записей: ${count}`);
+      res.json({ success: true, count });
+    } else {
+      // Fallback: сохраняем в файл
+      let history = readFromFile();
+      history.push(record);
+      
+      // Ограничиваем историю до 10000 записей
+      if (history.length > 10000) {
+        history = history.slice(-10000);
+      }
+      
+      writeToFile(history);
+      console.log(`✅ Данные сохранены в файл. Всего записей: ${history.length}`);
+      res.json({ success: true, count: history.length });
     }
-    
-    // Добавляем новую запись
-    history.push(record);
-    
-    // Ограничиваем историю до 10000 записей
-    if (history.length > 10000) {
-      history = history.slice(-10000);
-    }
-    
-    // Сохраняем обратно
-    fs.writeFileSync(DATA_FILE, JSON.stringify(history, null, 2));
-    
-    console.log(`✅ Данные сохранены. Всего записей: ${history.length}`);
-    res.json({ success: true, count: history.length });
   } catch (error) {
     console.error('❌ Ошибка сохранения:', error);
     res.status(500).json({ success: false, error: error.message });
@@ -91,35 +130,23 @@ app.post('/save', (req, res) => {
 });
 
 // Получение текущих данных (последняя запись)
-app.get('/api', (req, res) => {
+app.get('/api', async (req, res) => {
   try {
-    if (!fs.existsSync(DATA_FILE)) {
-      console.log('⚠️ Файл данных не найден');
-      return res.json({ v: false, error: 'Файл данных не найден' });
-    }
+    let lastRecord = null;
     
-    const fileContent = fs.readFileSync(DATA_FILE, 'utf8').trim();
-    let history = [];
-    
-    if (fileContent) {
-      try {
-        history = JSON.parse(fileContent);
-        if (!Array.isArray(history)) {
-          history = [];
-        }
-      } catch (parseError) {
-        console.error('⚠️ Ошибка парсинга файла данных:', parseError.message);
-        history = [];
+    if (USE_SUPABASE) {
+      lastRecord = await db.getLastRecord();
+    } else {
+      const history = readFromFile();
+      if (history.length > 0) {
+        lastRecord = history[history.length - 1];
       }
     }
     
-    if (history.length === 0) {
+    if (!lastRecord) {
       console.log('⚠️ История данных пуста');
       return res.json({ v: false, error: 'История данных пуста' });
     }
-    
-    // Возвращаем последнюю запись
-    const lastRecord = history[history.length - 1];
     
     console.log('📊 Последняя запись:', {
       timestamp: lastRecord.timestamp || lastRecord.date,
@@ -139,7 +166,7 @@ app.get('/api', (req, res) => {
       p: lastRecord.p !== undefined ? lastRecord.p : 0,
       k: lastRecord.k !== undefined ? lastRecord.k : 0,
       v: lastRecord.v === true,
-      ip: 'localhost'
+      ip: lastRecord.ip || 'localhost'
     };
     
     console.log('✅ Отправка данных:', response);
@@ -151,44 +178,39 @@ app.get('/api', (req, res) => {
 });
 
 // Получение истории данных
-app.get('/history', (req, res) => {
+app.get('/history', async (req, res) => {
   try {
-    if (!fs.existsSync(DATA_FILE)) {
-      return res.json({ total: 0, count: 0, data: [] });
-    }
-    
-    const fileContent = fs.readFileSync(DATA_FILE, 'utf8').trim();
     let history = [];
+    let total = 0;
     
-    if (fileContent) {
-      try {
-        history = JSON.parse(fileContent);
-        if (!Array.isArray(history)) {
-          console.error('⚠️ Файл данных не является массивом, инициализируем пустым массивом');
-          history = [];
-          fs.writeFileSync(DATA_FILE, JSON.stringify([]));
-        }
-      } catch (parseError) {
-        console.error('⚠️ Ошибка парсинга файла данных:', parseError.message);
-        history = [];
-        fs.writeFileSync(DATA_FILE, JSON.stringify([]));
-      }
+    if (USE_SUPABASE) {
+      // Опциональные параметры фильтрации
+      const limitParam = parseInt(req.query.limit);
+      const offsetParam = parseInt(req.query.offset);
+      
+      const limit = (isNaN(limitParam) || limitParam <= 0) ? 0 : limitParam;
+      const offset = (isNaN(offsetParam) || offsetParam < 0) ? 0 : offsetParam;
+      
+      total = await db.getRecordsCount();
+      history = await db.getRecords(limit || total, offset);
+    } else {
+      history = readFromFile();
+      total = history.length;
+      
+      // Опциональные параметры фильтрации
+      const limitParam = parseInt(req.query.limit);
+      const offsetParam = parseInt(req.query.offset);
+      
+      const limit = (isNaN(limitParam) || limitParam <= 0) ? history.length : limitParam;
+      const offset = (isNaN(offsetParam) || offsetParam < 0) ? 0 : offsetParam;
+      
+      history = history.slice(offset, offset + limit);
     }
-    
-    // Опциональные параметры фильтрации
-    const limitParam = parseInt(req.query.limit);
-    const offsetParam = parseInt(req.query.offset);
-    
-    // Обрабатываем отрицательные и невалидные значения
-    const limit = (isNaN(limitParam) || limitParam <= 0) ? history.length : limitParam;
-    const offset = (isNaN(offsetParam) || offsetParam < 0) ? 0 : offsetParam;
-    
-    const filtered = history.slice(offset, offset + limit);
     
     res.json({
-      total: history.length,
-      count: filtered.length,
-      data: filtered
+      total,
+      count: history.length,
+      data: history
     });
   } catch (error) {
     console.error('❌ Ошибка чтения истории:', error);
@@ -197,25 +219,18 @@ app.get('/history', (req, res) => {
 });
 
 // Экспорт в CSV
-app.get('/export/csv', (req, res) => {
+app.get('/export/csv', async (req, res) => {
   try {
-    if (!fs.existsSync(DATA_FILE)) {
-      return res.status(404).send('Нет данных для экспорта');
-    }
-    
-    const fileContent = fs.readFileSync(DATA_FILE, 'utf8').trim();
     let history = [];
     
-    if (fileContent) {
-      try {
-        history = JSON.parse(fileContent);
-        if (!Array.isArray(history)) {
-          history = [];
-        }
-      } catch (parseError) {
-        console.error('⚠️ Ошибка парсинга файла данных:', parseError.message);
-        history = [];
-      }
+    if (USE_SUPABASE) {
+      history = await db.getAllRecords();
+    } else {
+      history = readFromFile();
+    }
+    
+    if (history.length === 0) {
+      return res.status(404).send('Нет данных для экспорта');
     }
     
     // Заголовки CSV
@@ -238,25 +253,18 @@ app.get('/export/csv', (req, res) => {
 });
 
 // Экспорт в JSON
-app.get('/export/json', (req, res) => {
+app.get('/export/json', async (req, res) => {
   try {
-    if (!fs.existsSync(DATA_FILE)) {
-      return res.status(404).json({ error: 'Нет данных для экспорта' });
-    }
-    
-    const fileContent = fs.readFileSync(DATA_FILE, 'utf8').trim();
     let history = [];
     
-    if (fileContent) {
-      try {
-        history = JSON.parse(fileContent);
-        if (!Array.isArray(history)) {
-          history = [];
-        }
-      } catch (parseError) {
-        console.error('⚠️ Ошибка парсинга файла данных:', parseError.message);
-        history = [];
-      }
+    if (USE_SUPABASE) {
+      history = await db.getAllRecords();
+    } else {
+      history = readFromFile();
+    }
+    
+    if (history.length === 0) {
+      return res.status(404).json({ error: 'Нет данных для экспорта' });
     }
     
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -269,32 +277,22 @@ app.get('/export/json', (req, res) => {
 });
 
 // Статистика
-app.get('/stats', (req, res) => {
+app.get('/stats', async (req, res) => {
   try {
-    if (!fs.existsSync(DATA_FILE)) {
-      return res.json({ total: 0, first: null, last: null });
+    let stats = { total: 0, first: null, last: null };
+    
+    if (USE_SUPABASE) {
+      stats = await db.getStats();
+    } else {
+      const history = readFromFile();
+      stats = {
+        total: history.length,
+        first: history.length > 0 ? history[0].date : null,
+        last: history.length > 0 ? history[history.length - 1].date : null
+      };
     }
     
-    const fileContent = fs.readFileSync(DATA_FILE, 'utf8').trim();
-    let history = [];
-    
-    if (fileContent) {
-      try {
-        history = JSON.parse(fileContent);
-        if (!Array.isArray(history)) {
-          history = [];
-        }
-      } catch (parseError) {
-        console.error('⚠️ Ошибка парсинга файла данных:', parseError.message);
-        history = [];
-      }
-    }
-    
-    res.json({
-      total: history.length,
-      first: history.length > 0 ? history[0].date : null,
-      last: history.length > 0 ? history[history.length - 1].date : null
-    });
+    res.json(stats);
   } catch (error) {
     console.error('❌ Ошибка получения статистики:', error);
     res.status(500).json({ error: error.message });
@@ -302,10 +300,19 @@ app.get('/stats', (req, res) => {
 });
 
 // Очистка данных
-app.delete('/clear', (req, res) => {
+app.delete('/clear', async (req, res) => {
   try {
-    fs.writeFileSync(DATA_FILE, JSON.stringify([]));
-    console.log('🗑️ Данные очищены');
+    if (USE_SUPABASE) {
+      const success = await db.clearAllRecords();
+      if (!success) {
+        return res.status(500).json({ error: 'Ошибка очистки базы данных' });
+      }
+      console.log('🗑️ Данные очищены из Supabase');
+    } else {
+      writeToFile([]);
+      console.log('🗑️ Данные очищены из файла');
+    }
+    
     res.json({ success: true, message: 'Данные очищены' });
   } catch (error) {
     console.error('❌ Ошибка очистки:', error);
@@ -315,4 +322,3 @@ app.delete('/clear', (req, res) => {
 
 // Экспорт для Vercel Serverless Function
 module.exports = app;
-
