@@ -15,13 +15,12 @@ const USE_SUPABASE = !!(process.env.SUPABASE_URL && process.env.SUPABASE_KEY);
 app.use(cors());
 app.use(express.json());
 app.set('trust proxy', true);
-// Статические файлы обслуживаются Vercel автоматически, но оставляем для совместимости
-if (process.env.VERCEL) {
-  // На Vercel статические файлы обслуживаются через vercel.json routes
-  // Здесь только API endpoints
-} else {
-  app.use(express.static(path.join(__dirname, '..')));
-}
+
+// Статические файлы - обслуживаем через Express на Vercel
+app.use(express.static(path.join(__dirname, '..'), {
+  index: ['index.html'],
+  extensions: ['html', 'js', 'css', 'png', 'jpg', 'jpeg', 'gif', 'svg', 'ico']
+}));
 
 // Инициализация файла данных (fallback для локальной разработки)
 if (!USE_SUPABASE) {
