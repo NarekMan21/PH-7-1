@@ -167,6 +167,9 @@ void sendToBackend() {
   json += "\"p\":0,";   // Фосфор не применим для метеостанции
   json += "\"k\":0,";   // Калий не применим для метеостанции
   json += "\"v\":true";
+  json += ",\"ws\":" + String(sensorData.windspeed, 2);
+  json += ",\"wd\":\"" + sensorData.winddirection + "\"";
+  json += ",\"rain\":" + String(sensorData.rain, 2);
   json += "}";
   
   int httpCode = http.POST(json);

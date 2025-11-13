@@ -15,6 +15,9 @@ CREATE TABLE IF NOT EXISTS sensor_data (
     n REAL,
     p REAL,
     k REAL,
+    ws REAL,
+    wd TEXT,
+    rain REAL,
     v BOOLEAN DEFAULT false
 );
 

@@ -772,40 +772,83 @@
                         const sensorName = getSensorName(sensor.ip);
                         const lastUpdateTime = new Date(sensor.timestamp || sensor.date);
                         const timeAgo = getTimeAgo(lastUpdateTime);
+                        const isWeatherStation = sensor.ws !== undefined && sensor.ws !== null;
                         
-                        html += `
-                            <div class="card" style="border-left: 4px solid #4caf50; cursor: pointer;" onclick="if(!event.target.closest('.edit-btn')) showSensorCharts('${sensor.ip}', '${sensorName.replace(/'/g, "\\'")}')" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
-                                <div class="card-header">
-                                    <span class="card-title" id="sensor-name-${sensor.ip}">${sensorName}</span>
-                                    <div style="display: flex; align-items: center; gap: 10px;">
-                                        <div style="font-size: 0.8em; opacity: 0.7;">${sensor.ip}</div>
-                                        <button class="edit-btn" onclick="event.stopPropagation(); showRenameDialog('${sensor.ip}')" style="background: rgba(255, 255, 255, 0.2); border: none; border-radius: 5px; padding: 5px 8px; cursor: pointer; font-size: 0.8em; color: #fff; transition: all 0.3s;" onmouseover="this.style.background='rgba(255, 255, 255, 0.3)'" onmouseout="this.style.background='rgba(255, 255, 255, 0.2)'" title="Переименовать датчик">✏️</button>
+                        if (isWeatherStation) {
+                            // Карточка метеостанции
+                            html += `
+                                <div class="card" style="border-left: 4px solid #4caf50; cursor: pointer;" onclick="if(!event.target.closest('.edit-btn')) showSensorCharts('${sensor.ip}', '${sensorName.replace(/'/g, "\\'")}')" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+                                    <div class="card-header">
+                                        <span class="card-title" id="sensor-name-${sensor.ip}">${sensorName}</span>
+                                        <div style="display: flex; align-items: center; gap: 10px;">
+                                            <div style="font-size: 0.8em; opacity: 0.7;">${sensor.ip}</div>
+                                            <button class="edit-btn" onclick="event.stopPropagation(); showRenameDialog('${sensor.ip}')" style="background: rgba(255, 255, 255, 0.2); border: none; border-radius: 5px; padding: 5px 8px; cursor: pointer; font-size: 0.8em; color: #fff; transition: all 0.3s;" onmouseover="this.style.background='rgba(255, 255, 255, 0.3)'" onmouseout="this.style.background='rgba(255, 255, 255, 0.2)'" title="Переименовать датчик">✏️</button>
+                                        </div>
+                                    </div>
+                                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin-top: 15px;">
+                                        <div>
+                                            <div style="font-size: 0.9em; opacity: 0.8;">🌡️ Температура</div>
+                                            <div style="font-size: 1.8em; font-weight: 700;">${(sensor.t !== undefined && sensor.t !== null ? sensor.t.toFixed(1) : '0.0')}°C</div>
+                                        </div>
+                                        <div>
+                                            <div style="font-size: 0.9em; opacity: 0.8;">💧 Влажность</div>
+                                            <div style="font-size: 1.8em; font-weight: 700;">${(sensor.h !== undefined && sensor.h !== null ? sensor.h.toFixed(1) : '0.0')}%</div>
+                                        </div>
+                                        <div>
+                                            <div style="font-size: 0.9em; opacity: 0.8;">💨 Скорость ветра</div>
+                                            <div style="font-size: 1.8em; font-weight: 700;">${(sensor.ws !== undefined && sensor.ws !== null ? sensor.ws.toFixed(2) : '0.00')} км/ч</div>
+                                        </div>
+                                        <div>
+                                            <div style="font-size: 0.9em; opacity: 0.8;">🧭 Направление</div>
+                                            <div style="font-size: 1.8em; font-weight: 700;">${sensor.wd || '--'}</div>
+                                        </div>
+                                        <div style="grid-column: 1 / -1;">
+                                            <div style="font-size: 0.9em; opacity: 0.8;">🌧️ Осадки</div>
+                                            <div style="font-size: 1.8em; font-weight: 700;">${(sensor.rain !== undefined && sensor.rain !== null ? sensor.rain.toFixed(2) : '0.00')} мм</div>
+                                        </div>
+                                    </div>
+                                    <div class="card-footer">
+                                        <span>Метеостанция</span>
+                                        <span style="color: #4caf50; font-size: 1.2em;" title="Обновлено: ${timeAgo}">●</span>
                                     </div>
                                 </div>
-                                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin-top: 15px;">
-                                    <div>
-                                        <div style="font-size: 0.9em; opacity: 0.8;">🌡️ Температура</div>
-                                        <div style="font-size: 1.8em; font-weight: 700;">${(sensor.t !== undefined && sensor.t !== null ? sensor.t.toFixed(1) : '0.0')}°C</div>
+                            `;
+                        } else {
+                            // Карточка датчика почвы
+                            html += `
+                                <div class="card" style="border-left: 4px solid #4caf50; cursor: pointer;" onclick="if(!event.target.closest('.edit-btn')) showSensorCharts('${sensor.ip}', '${sensorName.replace(/'/g, "\\'")}')" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+                                    <div class="card-header">
+                                        <span class="card-title" id="sensor-name-${sensor.ip}">${sensorName}</span>
+                                        <div style="display: flex; align-items: center; gap: 10px;">
+                                            <div style="font-size: 0.8em; opacity: 0.7;">${sensor.ip}</div>
+                                            <button class="edit-btn" onclick="event.stopPropagation(); showRenameDialog('${sensor.ip}')" style="background: rgba(255, 255, 255, 0.2); border: none; border-radius: 5px; padding: 5px 8px; cursor: pointer; font-size: 0.8em; color: #fff; transition: all 0.3s;" onmouseover="this.style.background='rgba(255, 255, 255, 0.3)'" onmouseout="this.style.background='rgba(255, 255, 255, 0.2)'" title="Переименовать датчик">✏️</button>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <div style="font-size: 0.9em; opacity: 0.8;">💧 Влажность</div>
-                                        <div style="font-size: 1.8em; font-weight: 700;">${(sensor.h !== undefined && sensor.h !== null ? sensor.h.toFixed(1) : '0.0')}%</div>
+                                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin-top: 15px;">
+                                        <div>
+                                            <div style="font-size: 0.9em; opacity: 0.8;">🌡️ Температура</div>
+                                            <div style="font-size: 1.8em; font-weight: 700;">${(sensor.t !== undefined && sensor.t !== null ? sensor.t.toFixed(1) : '0.0')}°C</div>
+                                        </div>
+                                        <div>
+                                            <div style="font-size: 0.9em; opacity: 0.8;">💧 Влажность</div>
+                                            <div style="font-size: 1.8em; font-weight: 700;">${(sensor.h !== undefined && sensor.h !== null ? sensor.h.toFixed(1) : '0.0')}%</div>
+                                        </div>
+                                        <div>
+                                            <div style="font-size: 0.9em; opacity: 0.8;">🧪 pH</div>
+                                            <div style="font-size: 1.8em; font-weight: 700;">${(sensor.ph !== undefined && sensor.ph !== null ? sensor.ph.toFixed(1) : '0.0')}</div>
+                                        </div>
+                                        <div>
+                                            <div style="font-size: 0.9em; opacity: 0.8;">⚡ EC</div>
+                                            <div style="font-size: 1.8em; font-weight: 700;">${(sensor.ec !== undefined && sensor.ec !== null ? Math.round(sensor.ec) : '0')}</div>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <div style="font-size: 0.9em; opacity: 0.8;">🧪 pH</div>
-                                        <div style="font-size: 1.8em; font-weight: 700;">${(sensor.ph !== undefined && sensor.ph !== null ? sensor.ph.toFixed(1) : '0.0')}</div>
-                                    </div>
-                                    <div>
-                                        <div style="font-size: 0.9em; opacity: 0.8;">⚡ EC</div>
-                                        <div style="font-size: 1.8em; font-weight: 700;">${(sensor.ec !== undefined && sensor.ec !== null ? Math.round(sensor.ec) : '0')}</div>
+                                    <div class="card-footer">
+                                        <span>N: ${(sensor.n !== undefined && sensor.n !== null ? Math.round(sensor.n) : '0')} | P: ${(sensor.p !== undefined && sensor.p !== null ? Math.round(sensor.p) : '0')} | K: ${(sensor.k !== undefined && sensor.k !== null ? Math.round(sensor.k) : '0')}</span>
+                                        <span style="color: #4caf50; font-size: 1.2em;" title="Обновлено: ${timeAgo}">●</span>
                                     </div>
                                 </div>
-                                <div class="card-footer">
-                                    <span>N: ${(sensor.n !== undefined && sensor.n !== null ? Math.round(sensor.n) : '0')} | P: ${(sensor.p !== undefined && sensor.p !== null ? Math.round(sensor.p) : '0')} | K: ${(sensor.k !== undefined && sensor.k !== null ? Math.round(sensor.k) : '0')}</span>
-                                    <span style="color: #4caf50; font-size: 1.2em;" title="Обновлено: ${timeAgo}">●</span>
-                                </div>
-                            </div>
-                        `;
+                            `;
+                        }
                     });
                     
                     html += '</div>';
