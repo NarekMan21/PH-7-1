@@ -717,22 +717,30 @@
                         return;
                     }
                     
-                    // Группируем данные по IP адресам и берем последнюю запись для каждого
-                    const sensorsMap = new Map();
+                    // Фильтруем только валидные записи с IP адресами
+                    const validRecords = historyData.filter(record => record.v === true && record.ip);
                     
-                    historyData.forEach(record => {
-                        if (record.v === true && record.ip) {
-                            const ip = record.ip;
-                            const existing = sensorsMap.get(ip);
-                            
-                            // Если записи нет или текущая запись новее, обновляем
-                            if (!existing || new Date(record.timestamp || record.date) > new Date(existing.timestamp || existing.date)) {
-                                sensorsMap.set(ip, record);
-                            }
+                    console.log(`📊 Всего записей: ${historyData.length}, валидных: ${validRecords.length}`);
+                    
+                    // Сортируем по времени (самые новые первыми)
+                    validRecords.sort((a, b) => {
+                        const timeA = new Date(a.timestamp || a.date).getTime();
+                        const timeB = new Date(b.timestamp || b.date).getTime();
+                        return timeB - timeA; // По убыванию (новые первыми)
+                    });
+                    
+                    // Группируем по IP адресам и берем первую (самую новую) запись для каждого
+                    const sensorsMap = new Map();
+                    validRecords.forEach(record => {
+                        const ip = record.ip;
+                        if (!sensorsMap.has(ip)) {
+                            sensorsMap.set(ip, record);
+                            console.log(`✅ Датчик ${ip}: T=${record.t}, H=${record.h}, pH=${record.ph}, EC=${record.ec}, N=${record.n}, P=${record.p}, K=${record.k}, время=${record.timestamp || record.date}`);
                         }
                     });
                     
                     const sensors = Array.from(sensorsMap.values());
+                    console.log(`📡 Найдено датчиков: ${sensors.length}`);
                     
                     if (sensors.length === 0) {
                         status.textContent = 'ОФЛАЙН';
@@ -777,23 +785,23 @@
                                 <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin-top: 15px;">
                                     <div>
                                         <div style="font-size: 0.9em; opacity: 0.8;">🌡️ Температура</div>
-                                        <div style="font-size: 1.8em; font-weight: 700;">${sensor.t.toFixed(1)}°C</div>
+                                        <div style="font-size: 1.8em; font-weight: 700;">${(sensor.t !== undefined && sensor.t !== null ? sensor.t.toFixed(1) : '0.0')}°C</div>
                                     </div>
                                     <div>
                                         <div style="font-size: 0.9em; opacity: 0.8;">💧 Влажность</div>
-                                        <div style="font-size: 1.8em; font-weight: 700;">${sensor.h.toFixed(1)}%</div>
+                                        <div style="font-size: 1.8em; font-weight: 700;">${(sensor.h !== undefined && sensor.h !== null ? sensor.h.toFixed(1) : '0.0')}%</div>
                                     </div>
                                     <div>
                                         <div style="font-size: 0.9em; opacity: 0.8;">🧪 pH</div>
-                                        <div style="font-size: 1.8em; font-weight: 700;">${sensor.ph.toFixed(1)}</div>
+                                        <div style="font-size: 1.8em; font-weight: 700;">${(sensor.ph !== undefined && sensor.ph !== null ? sensor.ph.toFixed(1) : '0.0')}</div>
                                     </div>
                                     <div>
                                         <div style="font-size: 0.9em; opacity: 0.8;">⚡ EC</div>
-                                        <div style="font-size: 1.8em; font-weight: 700;">${Math.round(sensor.ec)}</div>
+                                        <div style="font-size: 1.8em; font-weight: 700;">${(sensor.ec !== undefined && sensor.ec !== null ? Math.round(sensor.ec) : '0')}</div>
                                     </div>
                                 </div>
                                 <div class="card-footer">
-                                    <span>N: ${Math.round(sensor.n)} | P: ${Math.round(sensor.p)} | K: ${Math.round(sensor.k)}</span>
+                                    <span>N: ${(sensor.n !== undefined && sensor.n !== null ? Math.round(sensor.n) : '0')} | P: ${(sensor.p !== undefined && sensor.p !== null ? Math.round(sensor.p) : '0')} | K: ${(sensor.k !== undefined && sensor.k !== null ? Math.round(sensor.k) : '0')}</span>
                                     <span style="color: #4caf50; font-size: 1.2em;" title="Обновлено: ${timeAgo}">●</span>
                                 </div>
                             </div>
