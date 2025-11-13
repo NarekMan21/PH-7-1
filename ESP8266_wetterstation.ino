@@ -19,14 +19,14 @@
 // Интервалы
 #define WIFI_RECONNECT_INTERVAL 30000
 #define PUBLISH_INTERVAL        30000  // Отправка данных каждые 30 секунд
-#define READ_INTERVAL           2000   // Чтение с датчиков каждые 2 секунды
+#define READ_INTERVAL           3000   // Чтение с датчиков каждые 3 секунды
 
 ESP8266WiFiMulti wifiMulti;
 ESP8266WebServer server(80);
 WiFiClient wifiClient;
 
 // Пины датчиков
-const byte dhtPin = D2;        // DHT11 датчик на D2
+const byte dhtPin = D2;        // DHT11 датчик на D2 (GPIO4)
 const byte rainPin = D5;       // Датчик дождя на D5
 const byte windSpeedPin = D7;  // Анемометр (скорость ветра) на D7
 const byte windDirPin = A0;    // Датчик направления ветра на A0
@@ -89,14 +89,82 @@ void ICACHE_RAM_ATTR cntRain() {
 
 // Чтение данных со всех датчиков
 void readSensorData() {
-  // Чтение данных с DHT11
-  float temperature = dht.readTemperature();
-  float humidity = dht.readHumidity();
+  // Важно: DHT11 требует минимум 2 секунды между чтениями
+  // Добавляем небольшую задержку для стабилизации
+  delay(250);
   
-  if (isnan(temperature) || isnan(humidity)) {
-    Serial.println("⚠️ Ошибка чтения DHT11");
-    sensorData.valid = false;
-    return;
+  // Убеждаемся, что внутренний подтягивающий резистор включен
+  pinMode(dhtPin, INPUT_PULLUP);
+  delay(10);
+  
+  // Диагностика: проверка состояния пина перед чтением
+  int pinState = digitalRead(dhtPin);
+  Serial.printf("🔍 Диагностика DHT11: Пин D2 (GPIO4) состояние = %d (1=подтянут к VCC)\n", pinState);
+  
+  // Чтение данных с DHT11 с повторными попытками
+  float temperature = NAN;
+  float humidity = NAN;
+  int attempts = 0;
+  const int maxAttempts = 5;  // Увеличено до 5 попыток
+  
+  while ((isnan(temperature) || isnan(humidity)) && attempts < maxAttempts) {
+    attempts++;
+    
+    // Сброс пина перед чтением для стабилизации
+    pinMode(dhtPin, OUTPUT);
+    digitalWrite(dhtPin, LOW);
+    delay(20);
+    pinMode(dhtPin, INPUT_PULLUP);
+    delay(250);  // DHT11 требует минимум 250мс после сброса
+    
+    // Переинициализация библиотеки
+    dht.begin();
+    delay(100);
+    
+    // Читаем влажность первой (DHT11 отправляет данные в порядке: влажность, температура)
+    humidity = dht.readHumidity();
+    temperature = dht.readTemperature();
+    
+    // Если не получилось, пробуем еще раз с задержкой
+    if (isnan(temperature) || isnan(humidity)) {
+      delay(500);
+      humidity = dht.readHumidity();
+      temperature = dht.readTemperature();
+    }
+    
+    if (isnan(temperature) || isnan(humidity)) {
+      if (attempts < maxAttempts) {
+        Serial.printf("⚠️ Попытка %d/%d чтения DHT11...\n", attempts, maxAttempts);
+        Serial.printf("   Температура: %s, Влажность: %s\n", 
+                      isnan(temperature) ? "NAN" : String(temperature).c_str(),
+                      isnan(humidity) ? "NAN" : String(humidity).c_str());
+        delay(1000); // Увеличена задержка до 1 секунды
+      } else {
+        Serial.println("❌ Ошибка чтения DHT11 после всех попыток");
+        Serial.println("   Возможные причины:");
+        Serial.println("   1. Датчик не подключен или подключен неправильно");
+        Serial.println("   2. Отсутствует подтягивающий резистор 4.7kΩ");
+        Serial.println("   3. Неисправный датчик DHT11");
+        Serial.println("   4. Проблемы с питанием (нужно 3.3V, не 5V!)");
+        Serial.println("   5. Слишком длинные провода (>20см)");
+        Serial.println("   Проверьте подключение:");
+        Serial.println("   - VCC -> 3.3V (НЕ 5V!)");
+        Serial.println("   - GND -> GND");
+        Serial.printf("   - DATA -> D%d (GPIO%d)\n", dhtPin, dhtPin);
+        Serial.println("   - Внутренний подтягивающий резистор: ВКЛЮЧЕН");
+        Serial.println("   - Если не работает, попробуйте внешний резистор 4.7kΩ");
+        Serial.println("   - Проверьте, что датчик подключен правильно к D2");
+        Serial.println("   ⚠️ Продолжаю работу без данных DHT11...");
+        // Устанавливаем значения по умолчанию для продолжения работы
+        sensorData.temperature = 0.0;
+        sensorData.humidity = 0.0;
+        sensorData.valid = false;  // Помечаем как невалидные, но продолжаем работу
+        // Не возвращаемся, чтобы остальные датчики продолжали работать
+      }
+    } else {
+      // Успешное чтение - выходим из цикла
+      break;
+    }
   }
 
   // Чтение данных ветра и дождя
@@ -121,18 +189,26 @@ void readSensorData() {
     }
   }
 
-  // Сохранение данных
-  sensorData.temperature = temperature;
-  sensorData.humidity = humidity;
+  // Сохранение данных (только если DHT11 прочитан успешно)
+  if (!isnan(temperature) && !isnan(humidity)) {
+    sensorData.temperature = temperature;
+    sensorData.humidity = humidity;
+    sensorData.valid = true;
+  }
+  // Данные ветра и дождя сохраняем всегда
   sensorData.windspeed = ws;
   sensorData.winddirection = wd;
   sensorData.rain = r;
-  sensorData.valid = true;
 
   // Вывод показаний в Serial Monitor
   Serial.println("\n========== ПОКАЗАНИЯ МЕТЕОСТАНЦИИ ==========");
-  Serial.printf("Температура:     %.1f°C\n", sensorData.temperature);
-  Serial.printf("Влажность:       %.1f%%\n", sensorData.humidity);
+  if (sensorData.valid) {
+    Serial.printf("Температура:     %.1f°C\n", sensorData.temperature);
+    Serial.printf("Влажность:       %.1f%%\n", sensorData.humidity);
+  } else {
+    Serial.println("Температура:     -- (DHT11 недоступен)");
+    Serial.println("Влажность:       -- (DHT11 недоступен)");
+  }
   Serial.printf("Скорость ветра:  %.2f км/ч\n", sensorData.windspeed);
   Serial.printf("Направление:    %s\n", sensorData.winddirection.c_str());
   Serial.printf("Осадки:          %.2f мм\n", sensorData.rain);
@@ -141,9 +217,8 @@ void readSensorData() {
 
 // Отправка данных на бэкенд
 void sendToBackend() {
-  if (!sensorData.valid) {
-    return;
-  }
+  // Отправляем данные даже если DHT11 не работает (отправляем 0 для температуры и влажности)
+  // Остальные датчики (ветер, дождь) могут работать независимо
   
   if (millis() - lastPublishTime < PUBLISH_INTERVAL) {
     return;
@@ -156,17 +231,17 @@ void sendToBackend() {
   http.setTimeout(10000);  // Таймаут 10 секунд
   
   // Формируем JSON в формате проекта
-  // Для метеостанции отправляем только температуру и влажность
+  // Для метеостанции отправляем температуру и влажность (или 0 если DHT11 не работает)
   // Остальные поля (ec, ph, n, p, k) устанавливаем в 0
   String json = "{";
-  json += "\"t\":" + String(sensorData.temperature, 1) + ",";
-  json += "\"h\":" + String(sensorData.humidity, 1) + ",";
+  json += "\"t\":" + String(sensorData.valid ? sensorData.temperature : 0.0, 1) + ",";
+  json += "\"h\":" + String(sensorData.valid ? sensorData.humidity : 0.0, 1) + ",";
   json += "\"ec\":0,";  // Электропроводность не применима для метеостанции
   json += "\"ph\":0,";  // pH не применим для метеостанции
   json += "\"n\":0,";   // Азот не применим для метеостанции
   json += "\"p\":0,";   // Фосфор не применим для метеостанции
   json += "\"k\":0,";   // Калий не применим для метеостанции
-  json += "\"v\":true";
+  json += "\"v\":" + String(sensorData.valid ? "true" : "false");
   json += ",\"ws\":" + String(sensorData.windspeed, 2);
   json += ",\"wd\":\"" + sensorData.winddirection + "\"";
   json += ",\"rain\":" + String(sensorData.rain, 2);
@@ -309,7 +384,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         content.innerHTML = html;
                         lastUpdate.textContent = formatTime(Date.now());
                         if (data.ip) document.getElementById('ip').textContent = data.ip;
-                    } else {
+    } else {
                         status.textContent = 'ОФЛАЙН';
                         status.className = 'status offline';
                         content.innerHTML = '<div class="card"><div class="card-header"><span class="card-title">Нет данных</span><div class="card-icon">⚠️</div></div><div class="card-value">--<span class="card-unit"></span></div><div class="card-footer"><span>Ожидание данных с датчиков</span></div></div>';
@@ -359,9 +434,25 @@ void setup() {
   Serial.println("    (Адаптировано для HTTP бэкенда)");
   Serial.println("=======================================\n");
   
-  // Инициализация DHT11
+  // Инициализация DHT11 с внутренним подтягивающим резистором
+  pinMode(dhtPin, INPUT_PULLUP);  // Включаем внутренний подтягивающий резистор (~45kΩ к VCC)
+  delay(100);
   dht.begin();
+  delay(2000);  // Увеличена задержка после инициализации
   Serial.println("✅ DHT11 инициализирован");
+  Serial.printf("   Пин: D2 (GPIO4)\n");
+  Serial.printf("   Тип: DHT11\n");
+  Serial.println("   Внутренний подтягивающий резистор: ВКЛЮЧЕН (~45kΩ)");
+  
+  // Тестовое чтение для проверки подключения
+  float testTemp = dht.readTemperature();
+  float testHum = dht.readHumidity();
+  if (!isnan(testTemp) && !isnan(testHum)) {
+    Serial.printf("   Тест: T=%.1f°C, H=%.1f%% ✅\n", testTemp, testHum);
+  } else {
+    Serial.println("   Тест: ОШИБКА чтения ⚠️");
+    Serial.println("   Проверьте подключение датчика!");
+  }
 
   // Настройка пинов для ветра и дождя
   pinMode(windSpeedPin, INPUT_PULLUP);

@@ -542,6 +542,7 @@
             <div class="chart-tabs">
                 <button class="chart-tab active" onclick="showChart('temperature')">Температура</button>
                 <button class="chart-tab" onclick="showChart('humidity')">Влажность</button>
+                <button class="chart-tab" onclick="showChart('ec')">Электропроводность</button>
                 <button class="chart-tab" onclick="showChart('ph')">pH</button>
                 <button class="chart-tab" onclick="showChart('npk')">NPK</button>
                 <button class="chart-tab" onclick="showChart('all')">Все параметры</button>
@@ -564,6 +565,16 @@
                 </div>
                 <div class="chart-container">
                     <canvas id="humidityChart"></canvas>
+                </div>
+            </div>
+
+            <div id="ec-chart" class="chart-section" style="display: none;">
+                <div class="chart-header">
+                    <h3 class="chart-title">Электропроводность (EC)</h3>
+                    <p class="chart-description">Изменение электропроводности почвы во времени</p>
+                </div>
+                <div class="chart-container">
+                    <canvas id="ecChart"></canvas>
                 </div>
             </div>
 
@@ -984,15 +995,28 @@
                 // Формируем данные для графиков
                 allData = historyData
                     .filter(d => d.v === true && d.ip)
-                    .map(record => ({
-                        timestamp: new Date(record.timestamp || record.date).getTime(),
-                        date: new Date(record.timestamp || record.date),
-                        ip: record.ip || 'unknown',
-                        ...record
-                    }));
+                    .map(record => {
+                        // Правильный парсинг даты - сначала пробуем timestamp, потом date
+                        let timestamp;
+                        if (record.timestamp) {
+                            timestamp = new Date(record.timestamp).getTime();
+                        } else if (record.date) {
+                            // Парсим дату в формате "DD.MM.YYYY, HH:MM:SS" или ISO
+                            timestamp = new Date(record.date).getTime();
+                        } else {
+                            timestamp = Date.now();
+                        }
+                        
+                        return {
+                            timestamp: timestamp,
+                            date: new Date(timestamp),
+                            ip: record.ip || 'unknown',
+                            ...record
+                        };
+                    });
                 
-                // Сортируем по времени
-                allData.sort((a, b) => a.timestamp - b.timestamp);
+                // Сортируем по времени по убыванию (самая свежая первая)
+                allData.sort((a, b) => b.timestamp - a.timestamp);
 
                 // Получаем уникальные IP адреса
                 const uniqueIPs = [...new Set(allData.map(d => d.ip))];
@@ -1011,11 +1035,21 @@
             document.getElementById('totalRecords').textContent = allData.length;
             
             if (allData.length > 0) {
-                const first = new Date(allData[0].timestamp || allData[0].date);
-                const last = new Date(allData[allData.length - 1].timestamp || allData[allData.length - 1].date);
+                // Данные отсортированы по убыванию (самая свежая первая)
+                // Первая запись = самая свежая (последняя по времени)
+                // Последняя запись = самая старая (первая по времени)
+                const lastRecord = allData[0]; // Самая свежая запись
+                const firstRecord = allData[allData.length - 1]; // Самая старая запись
                 
-                document.getElementById('firstRecord').textContent = first.toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-                document.getElementById('lastRecord').textContent = last.toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+                const lastDate = lastRecord.date || new Date(lastRecord.timestamp);
+                const firstDate = firstRecord.date || new Date(firstRecord.timestamp);
+                
+                document.getElementById('firstRecord').textContent = firstDate.toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+                document.getElementById('lastRecord').textContent = lastDate.toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+                
+                console.log('📊 Статистика обновлена:');
+                console.log(`   Первая запись (самая старая): ${firstDate.toLocaleString('ru-RU')}`);
+                console.log(`   Последняя запись (самая свежая): ${lastDate.toLocaleString('ru-RU')}`);
             }
         }
 
@@ -1024,7 +1058,7 @@
             const chartData = allData
                 .filter(d => d.v === true)
                 .map(d => ({
-                    date: new Date(d.timestamp || d.date),
+                    date: d.date || new Date(d.timestamp),
                     t: d.t,
                     h: d.h,
                     ph: d.ph,
@@ -1033,7 +1067,7 @@
                     k: d.k,
                     ec: d.ec
                 }))
-                .sort((a, b) => a.date - b.date);
+                .sort((a, b) => a.date.getTime() - b.date.getTime()); // По возрастанию для графиков
 
             if (chartData.length === 0) return;
 
@@ -1058,6 +1092,19 @@
                     data: chartData.map(d => d.h),
                     borderColor: 'rgba(59, 130, 246, 1)',
                     backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }]
+            }, 'line');
+
+            // График электропроводности (EC)
+            createChart('ecChart', {
+                labels: chartData.map(d => d.date.toLocaleString('ru-RU', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })),
+                datasets: [{
+                    label: 'Электропроводность (µS/cm)',
+                    data: chartData.map(d => d.ec),
+                    borderColor: 'rgba(251, 146, 60, 1)',
+                    backgroundColor: 'rgba(251, 146, 60, 0.1)',
                     tension: 0.4,
                     fill: true
                 }]
@@ -1110,6 +1157,7 @@
             // График всех параметров (нормализованный)
             const maxT = Math.max(...chartData.map(d => d.t || 1));
             const maxH = Math.max(...chartData.map(d => d.h || 1));
+            const maxEC = Math.max(...chartData.map(d => d.ec || 1));
             const maxPH = Math.max(...chartData.map(d => d.ph || 1));
 
             createChart('allChart', {
@@ -1128,6 +1176,14 @@
                         data: chartData.map(d => (d.h / maxH) * 100),
                         borderColor: 'rgba(59, 130, 246, 1)',
                         backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        tension: 0.4,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: 'Электропроводность (норм.)',
+                        data: chartData.map(d => (d.ec / maxEC) * 100),
+                        borderColor: 'rgba(251, 146, 60, 1)',
+                        backgroundColor: 'rgba(251, 146, 60, 0.1)',
                         tension: 0.4,
                         yAxisID: 'y'
                     },
@@ -1174,9 +1230,9 @@
                 console.log(`   Датчик ${ip}: ${sensorsData[ip].length} записей`);
             });
 
-            // Сортируем данные по времени для каждого датчика
+                // Сортируем данные по времени для каждого датчика (по возрастанию для графиков)
             Object.values(sensorsData).forEach(sd => {
-                sd.sort((a, b) => a.date - b.date);
+                sd.sort((a, b) => a.date.getTime() - b.date.getTime());
             });
 
             // Цвета для датчиков
@@ -1300,6 +1356,35 @@
                 datasets: phDatasets
             }, 'line');
 
+            // График электропроводности (EC) - сравнение всех датчиков
+            const ecDatasets = Object.entries(sensorsData).map(([ip, data], index) => {
+                const dataPoints = sortedTimestamps.map(ts => {
+                    let point = data.find(d => d.date.getTime() === ts);
+                    if (!point) {
+                        const timeWindow = 30 * 1000;
+                        point = data.find(d => {
+                            const diff = Math.abs(d.date.getTime() - ts);
+                            return diff <= timeWindow;
+                        });
+                    }
+                    return point ? point.ec : null;
+                });
+                return {
+                    label: getSensorName(ip),
+                    data: dataPoints,
+                    borderColor: colors[index % colors.length].border,
+                    backgroundColor: colors[index % colors.length].bg,
+                    tension: 0.4,
+                    fill: false,
+                    spanGaps: true
+                };
+            });
+
+            createChart('ecChart', {
+                labels: labels,
+                datasets: ecDatasets
+            }, 'line');
+
             // График NPK - сравнение всех датчиков
             const npkDatasets = [];
             Object.entries(sensorsData).forEach(([ip, data], index) => {
@@ -1389,6 +1474,10 @@
                     const point = findPoint(ts);
                     return point ? point.h : null;
                 });
+                const ecDataPoints = sortedTimestamps.map(ts => {
+                    const point = findPoint(ts);
+                    return point ? point.ec : null;
+                });
                 const phDataPoints = sortedTimestamps.map(ts => {
                     const point = findPoint(ts);
                     return point ? point.ph : null;
@@ -1410,6 +1499,16 @@
                         borderColor: color.border,
                         backgroundColor: color.bg,
                         borderDash: [5, 5],
+                        tension: 0.4,
+                        fill: false,
+                        spanGaps: true
+                    },
+                    {
+                        label: `${sensorName} - Электропроводность`,
+                        data: ecDataPoints,
+                        borderColor: color.border,
+                        backgroundColor: color.bg,
+                        borderDash: [3, 3],
                         tension: 0.4,
                         fill: false,
                         spanGaps: true
