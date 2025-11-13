@@ -971,8 +971,28 @@
                 const result = await response.json();
                 let data = result.data || result || [];
                 
-                // Фильтруем данные по IP датчика
-                allData = data.filter(d => d.ip === ip);
+                // Фильтруем данные по IP датчика и валидности
+                allData = data
+                    .filter(d => d.ip === ip && d.v === true)
+                    .map(record => {
+                        // Правильный парсинг даты
+                        let timestamp;
+                        if (record.timestamp) {
+                            timestamp = new Date(record.timestamp).getTime();
+                        } else if (record.date) {
+                            timestamp = new Date(record.date).getTime();
+                        } else {
+                            timestamp = Date.now();
+                        }
+                        
+                        return {
+                            timestamp: timestamp,
+                            date: new Date(timestamp),
+                            ip: record.ip || 'unknown',
+                            ...record
+                        };
+                    })
+                    .sort((a, b) => a.timestamp - b.timestamp); // Сортируем по времени
                 
                 if (allData.length === 0) {
                     console.log(`⚠️ Нет данных в базе для датчика ${ip}`);
@@ -982,6 +1002,8 @@
                     }
                 } else {
                     console.log(`✅ Найдено ${allData.length} записей для датчика ${ip}`);
+                    console.log(`   Первая запись: ${allData[0].date.toLocaleString('ru-RU')}`);
+                    console.log(`   Последняя запись: ${allData[allData.length - 1].date.toLocaleString('ru-RU')}`);
                 }
 
                 updateStats();
@@ -1097,8 +1119,21 @@
 
         // Создание графиков для одного датчика
         function createCharts() {
-            const chartData = allData
-                .filter(d => d.v === true)
+            // Убеждаемся, что используем только данные из allData (уже отфильтрованы по IP)
+            // Если selectedSensorIp установлен, показываем только этого датчика
+            let dataToUse = allData;
+            
+            // Дополнительная проверка: если selectedSensorIp установлен, фильтруем еще раз
+            if (selectedSensorIp) {
+                dataToUse = allData.filter(d => d.ip === selectedSensorIp && d.v === true);
+                console.log(`📊 Создание графиков для датчика ${selectedSensorIp}: ${dataToUse.length} записей`);
+            } else {
+                // Если selectedSensorIp не установлен, но это не сравнение всех, используем все данные из allData
+                dataToUse = allData.filter(d => d.v === true);
+                console.log(`📊 Создание графиков для одного датчика: ${dataToUse.length} записей`);
+            }
+            
+            const chartData = dataToUse
                 .map(d => ({
                     date: d.date || new Date(d.timestamp),
                     t: d.t,
@@ -1111,7 +1146,12 @@
                 }))
                 .sort((a, b) => a.date.getTime() - b.date.getTime()); // По возрастанию для графиков
 
-            if (chartData.length === 0) return;
+            if (chartData.length === 0) {
+                console.log('⚠️ Нет данных для создания графиков');
+                return;
+            }
+            
+            console.log(`✅ Создание графиков с ${chartData.length} точками данных`);
 
             // График температуры
             createChart('temperatureChart', {
