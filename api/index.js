@@ -181,11 +181,17 @@ app.get('/history', async (req, res) => {
       const limitParam = parseInt(req.query.limit);
       const offsetParam = parseInt(req.query.offset);
       
-      const limit = (isNaN(limitParam) || limitParam <= 0) ? 0 : limitParam;
-      const offset = (isNaN(offsetParam) || offsetParam < 0) ? 0 : offsetParam;
-      
       total = await db.getRecordsCount();
-      history = await db.getRecords(limit || total, offset);
+      
+      // Если limit не указан или 0, получаем все записи
+      if (isNaN(limitParam) || limitParam <= 0) {
+        console.log(`📥 Запрос всех записей из Supabase (всего: ${total})`);
+        history = await db.getAllRecords();
+      } else {
+        const limit = limitParam;
+        const offset = (isNaN(offsetParam) || offsetParam < 0) ? 0 : offsetParam;
+        history = await db.getRecords(limit, offset);
+      }
     } else {
       history = readFromFile();
       total = history.length;
