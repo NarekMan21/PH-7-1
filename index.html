@@ -1127,8 +1127,21 @@
                                             <div style="font-size: 1.8em; font-weight: 700;">${(sensor.ec !== undefined && sensor.ec !== null ? Math.round(sensor.ec) : '0')}</div>
                                         </div>
                                     </div>
+                                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255, 255, 255, 0.2);">
+                                        <div>
+                                            <div style="font-size: 0.9em; opacity: 0.8;">🌿 Азот (N)</div>
+                                            <div style="font-size: 1.8em; font-weight: 700;">${(sensor.n !== undefined && sensor.n !== null ? Math.round(sensor.n) : '0')}</div>
+                                        </div>
+                                        <div>
+                                            <div style="font-size: 0.9em; opacity: 0.8;">⚗️ Фосфор (P)</div>
+                                            <div style="font-size: 1.8em; font-weight: 700;">${(sensor.p !== undefined && sensor.p !== null ? Math.round(sensor.p) : '0')}</div>
+                                        </div>
+                                        <div>
+                                            <div style="font-size: 0.9em; opacity: 0.8;">💎 Калий (K)</div>
+                                            <div style="font-size: 1.8em; font-weight: 700;">${(sensor.k !== undefined && sensor.k !== null ? Math.round(sensor.k) : '0')}</div>
+                                        </div>
+                                    </div>
                                     <div class="card-footer">
-                                        <span>N: ${(sensor.n !== undefined && sensor.n !== null ? Math.round(sensor.n) : '0')} | P: ${(sensor.p !== undefined && sensor.p !== null ? Math.round(sensor.p) : '0')} | K: ${(sensor.k !== undefined && sensor.k !== null ? Math.round(sensor.k) : '0')}</span>
                                         <span style="color: #4caf50; font-size: 1.2em;" title="Обновлено: ${timeAgo}">●</span>
                                     </div>
                                 </div>
