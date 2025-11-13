@@ -735,7 +735,8 @@
                         const ip = record.ip;
                         if (!sensorsMap.has(ip)) {
                             sensorsMap.set(ip, record);
-                            console.log(`✅ Датчик ${ip}: T=${record.t}, H=${record.h}, pH=${record.ph}, EC=${record.ec}, N=${record.n}, P=${record.p}, K=${record.k}, время=${record.timestamp || record.date}`);
+                            const isWS = record.ws !== undefined;
+                            console.log(`✅ Датчик ${ip}: T=${record.t}, H=${record.h}, pH=${record.ph}, EC=${record.ec}, N=${record.n}, P=${record.p}, K=${record.k}, WS=${record.ws}, WD=${record.wd}, Rain=${record.rain}, Метео=${isWS}, время=${record.timestamp || record.date}`);
                         }
                     });
                     
@@ -772,7 +773,13 @@
                         const sensorName = getSensorName(sensor.ip);
                         const lastUpdateTime = new Date(sensor.timestamp || sensor.date);
                         const timeAgo = getTimeAgo(lastUpdateTime);
-                        const isWeatherStation = sensor.ws !== undefined && sensor.ws !== null;
+                        // Проверяем, является ли это метеостанцией (проверяем наличие поля ws, даже если оно 0)
+                        const isWeatherStation = sensor.ws !== undefined;
+                        
+                        // Дополнительное логирование для отладки
+                        if (sensor.ws !== undefined) {
+                            console.log(`🌤️ Обнаружена метеостанция ${sensor.ip}: ws=${sensor.ws}, wd=${sensor.wd}, rain=${sensor.rain}`);
+                        }
                         
                         if (isWeatherStation) {
                             // Карточка метеостанции - отдельная карточка со всеми показаниями
