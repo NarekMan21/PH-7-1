@@ -15,5 +15,8 @@
   },
   "engines": {
     "node": "22.x"
+  },
+  "devDependencies": {
+    "shadcn": "^3.5.0"
   }
 }
