@@ -763,25 +763,39 @@
                         return;
                     }
                     
-                    // Отображаем все датчики
-                    status.textContent = `ОНЛАЙН (${sensors.length} ${sensors.length === 1 ? 'датчик' : sensors.length < 5 ? 'датчика' : 'датчиков'})`;
-                    status.className = 'status online';
-                    
-                    let html = '<div class="grid">';
+                    // Разделяем метеостанции и датчики почвы
+                    const weatherStations = [];
+                    const soilSensors = [];
                     
                     sensors.forEach(sensor => {
-                        const sensorName = getSensorName(sensor.ip);
-                        const lastUpdateTime = new Date(sensor.timestamp || sensor.date);
-                        const timeAgo = getTimeAgo(lastUpdateTime);
-                        // Проверяем, является ли это метеостанцией (проверяем наличие поля ws, даже если оно 0)
-                        const isWeatherStation = sensor.ws !== undefined;
-                        
-                        // Дополнительное логирование для отладки
-                        if (sensor.ws !== undefined) {
-                            console.log(`🌤️ Обнаружена метеостанция ${sensor.ip}: ws=${sensor.ws}, wd=${sensor.wd}, rain=${sensor.rain}`);
-                        }
+                        // Метеостанция определяется по наличию поля ws (не null и не undefined)
+                        // И хотя бы одно из полей wd или rain должно быть заполнено
+                        const hasWS = sensor.ws !== undefined && sensor.ws !== null;
+                        const hasWD = sensor.wd !== undefined && sensor.wd !== null && sensor.wd !== '';
+                        const hasRain = sensor.rain !== undefined && sensor.rain !== null;
+                        const isWeatherStation = hasWS && (hasWD || hasRain || sensor.ws > 0);
                         
                         if (isWeatherStation) {
+                            weatherStations.push(sensor);
+                            console.log(`🌤️ Обнаружена метеостанция ${sensor.ip}: ws=${sensor.ws}, wd=${sensor.wd}, rain=${sensor.rain}`);
+                        } else {
+                            soilSensors.push(sensor);
+                        }
+                    });
+                    
+                    const totalSensors = weatherStations.length + soilSensors.length;
+                    status.textContent = `ОНЛАЙН (${totalSensors} ${totalSensors === 1 ? 'датчик' : totalSensors < 5 ? 'датчика' : 'датчиков'})`;
+                    status.className = 'status online';
+                    
+                    let html = '';
+                    
+                    // Сначала отображаем метеостанции отдельно вверху
+                    if (weatherStations.length > 0) {
+                        html += '<div class="grid" style="margin-bottom: 30px;">';
+                        weatherStations.forEach(sensor => {
+                            const sensorName = getSensorName(sensor.ip);
+                            const lastUpdateTime = new Date(sensor.timestamp || sensor.date);
+                            const timeAgo = getTimeAgo(lastUpdateTime);
                             // Карточка метеостанции - отдельная карточка со всеми показаниями
                             html += `
                                 <div class="card" style="border-left: 4px solid #2196F3; cursor: pointer; background: rgba(33, 150, 243, 0.1);" onclick="if(!event.target.closest('.edit-btn')) showSensorCharts('${sensor.ip}', '${sensorName.replace(/'/g, "\\'")}')" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
@@ -822,7 +836,18 @@
                                     </div>
                                 </div>
                             `;
-                        } else {
+                        });
+                        html += '</div>';
+                    }
+                    
+                    // Затем отображаем датчики почвы
+                    if (soilSensors.length > 0) {
+                        html += '<div class="grid">';
+                        soilSensors.forEach(sensor => {
+                            const sensorName = getSensorName(sensor.ip);
+                            const lastUpdateTime = new Date(sensor.timestamp || sensor.date);
+                            const timeAgo = getTimeAgo(lastUpdateTime);
+                            
                             // Карточка датчика почвы
                             html += `
                                 <div class="card" style="border-left: 4px solid #4caf50; cursor: pointer;" onclick="if(!event.target.closest('.edit-btn')) showSensorCharts('${sensor.ip}', '${sensorName.replace(/'/g, "\\'")}')" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
@@ -857,10 +882,9 @@
                                     </div>
                                 </div>
                             `;
-                        }
-                    });
-                    
-                    html += '</div>';
+                        });
+                        html += '</div>';
+                    }
                     content.innerHTML = html;
                     lastUpdate.textContent = formatTime(Date.now());
                 })
