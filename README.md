@@ -1,115 +1,37 @@
-# PH-7-1 Датчик почвы - Мониторинговая система
+# PH-7-1 Soil Monitoring System
 
-Система мониторинга параметров почвы с использованием ESP8266 и веб-интерфейса.
+ESP8266-based soil monitoring project with a web dashboard, history views, and API endpoints for sensor data.
 
-## 🚀 Быстрый старт
+## What it does
+- Receives sensor readings from ESP8266 devices
+- Shows current values in a web dashboard
+- Stores reading history
+- Provides chart views for trends over time
+- Supports data export and basic stats
 
-### Локальная разработка
+## Project structure
+- `index.html` — current sensor readings
+- `charts.html` — historical charts
+- `backend.js` — local backend server
+- `api/index.js` — serverless entry for Vercel
+- `esp8266_firmware.ino` — microcontroller firmware
+- `vercel.json` — Vercel config
 
-1. Установите Node.js (версия 14+)
-2. Установите зависимости:
+## Stack
+- Node.js / Express
+- Vanilla JavaScript
+- Chart.js
+- ESP8266
+- Optional Supabase for persistent storage
+
+## Local run
 ```bash
 npm install
-```
-
-3. Запустите сервер:
-```bash
 npm start
 ```
 
-Сервер будет доступен на `http://localhost:3000`
+## Deployment
+The project can run locally or be deployed to Vercel.
 
-### Деплой на Vercel
-
-1. Установите Vercel CLI:
-```bash
-npm i -g vercel
-```
-
-2. Войдите в Vercel:
-```bash
-vercel login
-```
-
-3. Деплой:
-```bash
-vercel
-```
-
-Или подключите репозиторий GitHub к Vercel через веб-интерфейс.
-
-## 📁 Структура проекта
-
-- `backend.js` - Бэкенд сервер (для локальной разработки)
-- `api/index.js` - Serverless функция для Vercel
-- `index.html` - Главная страница с текущими показаниями
-- `charts.html` - Страница с графиками
-- `esp8266_firmware.ino` - Прошивка для ESP8266
-- `vercel.json` - Конфигурация для Vercel
-
-## ⚙️ Настройка ESP8266
-
-1. Откройте `esp8266_firmware.ino` в Arduino IDE
-2. Обновите настройки WiFi:
-```cpp
-#define WIFI_SSID1      "ВАША_СЕТЬ"
-#define WIFI_PASSWORD1  "ВАШ_ПАРОЛЬ"
-```
-
-3. Обновите URL бэкенда:
-   - Для локальной разработки: `http://192.168.0.31:3000/save`
-   - Для Vercel: `https://ваш-проект.vercel.app/save`
-
-4. Загрузите прошивку на ESP8266
-
-## 📡 API Эндпоинты
-
-- **GET /api** - Получение текущих данных (последняя запись)
-- **POST /save** - Сохранение данных от ESP8266
-- **GET /history** - Получение истории данных
-  - Параметры: `?limit=100&offset=0`
-- **GET /export/csv** - Экспорт данных в CSV
-- **GET /export/json** - Экспорт данных в JSON
-- **GET /stats** - Статистика (количество записей, первая/последняя дата)
-- **DELETE /clear** - Очистка всех данных
-
-## 📊 Веб-интерфейс
-
-- **Главная страница** (`/index.html`) - Отображение текущих показаний всех датчиков
-- **Графики** (`/charts.html`) - Визуализация исторических данных
-
-### Функции интерфейса:
-
-- ✅ Автоматическое определение датчиков по IP адресам
-- ✅ Переименование датчиков (имена сохраняются в браузере)
-- ✅ Сравнение графиков всех датчиков
-- ✅ Детальные графики для каждого датчика
-- ✅ Фильтрация данных по времени
-
-## ⚠️ Важные замечания
-
-### Для Vercel:
-
-- **✅ Рекомендуется использовать Supabase** для постоянного хранения данных
-- Без Supabase данные хранятся в `/tmp` (временное хранилище) и могут быть потеряны
-- Подробные инструкции по настройке Supabase в файле `DEPLOY.md`
-- **💾 Скачивание базы данных**: Нажмите кнопку "💾 Скачать БД" на главной странице
-
-### Для локальной разработки:
-
-- Данные сохраняются в `sensor_data.json`
-- Убедитесь, что порт 3000 свободен
-- Проверьте настройки брандмауэра
-- Для использования Supabase локально, создайте файл `.env` с переменными `SUPABASE_URL` и `SUPABASE_KEY`
-
-## 🔧 Технологии
-
-- **Backend**: Node.js + Express
-- **Frontend**: Vanilla JavaScript + Chart.js
-- **Database**: Supabase (PostgreSQL) - для постоянного хранения данных
-- **Hardware**: ESP8266 + Modbus RS485 датчик
-- **Deployment**: Vercel (Serverless Functions)
-
-## 📝 Лицензия
-
-Проект для личного использования.
+## Why this repo matters
+This is a solid hardware + web monitoring project: real sensor input, browser UI, and practical data handling.
