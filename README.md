@@ -35,3 +35,12 @@ The project can run locally or be deployed to Vercel.
 
 ## Why this repo matters
 This is a solid hardware + web monitoring project: real sensor input, browser UI, and practical data handling.
+
+## Screenshots
+Add 1-3 screenshots in `docs/images/` and embed them like this:
+
+```md
+![Overview](docs/images/overview.png)
+![Dashboard](docs/images/dashboard.png)
+```
+
